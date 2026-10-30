@@ -3,38 +3,48 @@
 ## Verified Now
 
 - `withdrawal-001` and `infra-001` are `passing` with recorded evidence.
-- `make verify` passes: ruff clean and 54 tests pass.
+- `make verify` passes: ruff clean and 55 tests pass.
 - `./init.sh` passes with 5/5 harness subsystems and 16/16 checks.
 - `./scripts/verify-terraform.sh` passes: fmt, init, and validate.
-- A credentialed `terraform plan` renders 35 resources: VPC, subnets, NAT, EKS, node group, ECR, RDS, IAM, security groups, and outputs.
-- Demo defaults are one `t3.small` node (min 1, max 2) and `db.t4g.micro`; the README estimates ~$137/month plus data and taxes.
-- The local Docker Compose stack is healthy and `GET /health` returns 200.
-- No AWS resources were created; `terraform apply` was not run.
-- `provision-aws-eks-terraform` is archived as
-  `2026-10-30-provision-aws-eks-terraform`, and
-  `openspec/specs/aws-platform-infrastructure/spec.md` exists.
+- The AWS stack is deployed in `us-east-1`: VPC, 2 `t3.small` nodes, EKS 1.35
+  (`STANDARD` support), ECR, and private RDS PostgreSQL 15.
+- `terraform plan -detailed-exitcode` reports no changes after apply.
+- The application runs in EKS with 2/2 replicas, the mock dependency, and a
+  completed migration Job.
+- `GET /health` and `GET /docs` return 200 through
+  `kubectl port-forward` on port `18080`.
+- A real withdrawal returned `201 COMPLETED` with transaction
+  `ce802eb6-e775-473a-8620-f46e4a873caf`.
+- The local Docker Compose stack also remains healthy on port `8080`.
 
 ## Changed This Session
 
-- Added `infra/terraform/` with the complete AWS target topology.
-- Added variable validation, sensitive database inputs, outputs, example tfvars, and the Terraform README.
-- Added `scripts/verify-terraform.sh` and a credential-free Terraform CI job.
-- Updated the root README and architecture deployment notes.
-- Rewrote `openspec/config.yaml` with the full project context and rules.
-- Lowered the Terraform demo defaults and documented the cost profile.
-- Archived `provision-aws-eks-terraform` and created the
-  `aws-platform-infrastructure` main spec.
+- Fixed the EKS node and EKS-managed cluster security-group egress rules.
+- Set EKS upgrade support to `STANDARD`.
+- Resolved the RDS Free Tier restriction with backup retention `0` and
+  20 GiB maximum storage.
+- Built and pushed image
+  `205346659030.dkr.ecr.us-east-1.amazonaws.com/app-nube-2-dev/withdrawal-soles:3aac6c0`.
+- Deployed `withdrawal-soles` and `mock-dependencies` to namespace
+  `withdrawal-soles`.
+- Added a root route to the FastAPI app so `/` returns service links.
+- Updated evidence, progress, and Terraform documentation.
 
 ## Broken Or Unverified
 
-- Application deployment, Traefik on EKS, and Kubernetes manifests are not implemented.
-- Terraform uses local state; an S3 backend with locking is still required for shared use.
-- RDS is single-AZ and the VPC has one NAT gateway; both are development defaults.
-- No `terraform apply` has been approved, so the cluster is not running in AWS.
+- No LoadBalancer or public application URL exists; the app Service is
+  `ClusterIP` and is exposed through `kubectl port-forward`.
+- Terraform uses local state; an S3 backend with locking is still required for
+  shared use.
+- RDS is single-AZ and the VPC has one NAT gateway; both are development
+  defaults.
+- The AWS stack is running and billing approximately **$0.22/hour** plus data.
 
 ## Next Best Step
 
-Keep the application running locally. Deploy with `terraform apply` only after the account owner approves the EKS, EC2, NAT, and RDS cost. Then configure kubectl and add the application deployment manifests as a separate change.
+Practice against `http://localhost:18080/docs`, then run `terraform destroy`
+and confirm EKS, EC2, NAT, and RDS are gone. If a public URL is required, add a
+`LoadBalancer` Service or an Ingress; that creates an ELB/ALB and adds cost.
 
 ## Commands
 
@@ -42,6 +52,11 @@ Keep the application running locally. Deploy with `terraform apply` only after t
 ./init.sh
 ./scripts/verify-terraform.sh
 openspec validate --all --strict
-docker compose up -d --build
-curl http://localhost:8080/health
+
+aws eks update-kubeconfig --region us-east-1 --name app-nube-2-dev-eks
+kubectl -n withdrawal-soles get pods
+kubectl -n withdrawal-soles port-forward svc/withdrawal-soles 18080:80
+curl http://localhost:18080/health
+
+cd infra/terraform && terraform destroy
 ```

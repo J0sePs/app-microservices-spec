@@ -36,7 +36,8 @@ make verify        # ruff + pytest
 make run           # uvicorn on http://localhost:8000
 ```
 
-The health endpoint is `GET /health`.
+The health endpoint is `GET /health`. With the compose stack, the interactive
+API documentation is at `http://localhost:8080/docs`.
 
 ## Configuration
 

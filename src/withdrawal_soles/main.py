@@ -66,6 +66,17 @@ def create_app(
     install_error_handlers(app)
     app.include_router(withdrawals.router)
     app.include_router(health.router)
+
+    @app.get("/", include_in_schema=False)
+    async def root() -> dict[str, str]:
+        return {
+            "service": "withdrawal-soles",
+            "version": app.version,
+            "docs": "/docs",
+            "health": "/health",
+            "withdrawals": "/api/v1/withdrawals",
+        }
+
     return app
 
 

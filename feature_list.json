@@ -88,15 +88,24 @@
         "terraform init -backend=false: AWS provider 6.71.0 installed; lock file committed",
         "terraform validate: configuration valid",
         "credentialed terraform plan: Plan: 35 to add, 0 to change, 0 to destroy",
-        "cost-optimized defaults: one t3.small node (min 1, max 2) and db.t4g.micro; README estimates ~$137/month plus data and taxes",
+        "practice defaults: two t3.small nodes (min 1, max 2) on EKS 1.35 and db.t4g.micro; README estimates ~$157/month or ~$0.22/hour plus data and taxes",
         "plan includes the VPC, two public and two private subnets, NAT gateway, EKS cluster, managed node group, ECR repository, RDS PostgreSQL 15 instance, IAM roles, security groups, and outputs",
         "plan without TF_VAR_db_password: exit 1, no value for required variable, no resources created",
         "plan with node_desired_size=5: exit 1, precondition rejects a value outside the 1-3 bounds",
         "openspec validate provision-aws-eks-terraform --strict: Change is valid",
-        "No terraform apply was run and no AWS resources were created; deployment remains pending explicit approval",
+        "terraform apply completed: 35 resources created in us-east-1; EKS 1.35 in STANDARD support with 2 t3.small nodes Ready and RDS PostgreSQL 15 available",
+        "terraform plan -detailed-exitcode after apply: No changes, infrastructure matches the configuration",
+        "RDS Free Tier restriction resolved with db_backup_retention_period=0 and max_allocated_storage=20; instance is private with backup retention 0",
+        "ECR image 205346659030.dkr.ecr.us-east-1.amazonaws.com/app-nube-2-dev/withdrawal-soles:3aac6c0 built and pushed",
+        "scripts/deploy-eks-demo.sh: repeatable build, push, migration, and Kubernetes deployment",
+        "Kubernetes deployment withdrawal-soles: 2/2 replicas Running; mock-dependencies 1/1 Running; migration Job Completed",
+        "GET http://localhost:18080/health through kubectl port-forward: 200 {\"status\":\"ok\"}",
+        "GET http://localhost:18080/docs through kubectl port-forward: 200",
+        "POST http://localhost:18080/api/v1/withdrawals with Idempotency-Key eks-demo-1: 201 Created, status COMPLETED, transaction_id ce802eb6-e775-473a-8620-f46e4a873caf",
+        "Public IP check: NAT gateway 3.210.209.202 is outbound-only; EKS nodes and RDS are private; the application Service is ClusterIP and has no public IP",
         "docker compose ps and GET http://localhost:8080/health: local stack still healthy with 200 {\"status\":\"ok\"}"
       ],
-      "notes": "Terraform-only scope; application deployment manifests are a follow-up. This change stops at a verified plan and does not create AWS resources."
+      "notes": "Deployed to AWS on 2026-10-30. The application runs in EKS with 2 replicas and is reached through kubectl port-forward; no LoadBalancer or public application IP was created. Destroy the stack to stop charges."
     }
   ]
 }

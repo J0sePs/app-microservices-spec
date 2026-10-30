@@ -9,8 +9,8 @@ chat history is not.
 - Repository root: the directory containing this file
 - Standard startup path: `./init.sh`
 - Standard verification path: `./scripts/verify.sh`
-- Current highest-priority unfinished feature: none — all registered features are `passing`; application deployment and the other services are follow-ups
-- Current blocker: none; AWS deployment waits for explicit cost approval
+- Current highest-priority unfinished feature: none — all registered features are `passing`; the other five services are follow-ups
+- Current blocker: none; the AWS practice stack is running and must be destroyed to stop charges
 
 ## Session Log
 
@@ -100,7 +100,7 @@ chat history is not.
   - Updated the root README and architecture deployment notes.
   - Archived `provision-aws-eks-terraform`; the main `aws-platform-infrastructure` spec now exists.
   - Rewrote `openspec/config.yaml` with the full project context, technology stack, architecture and domain rules, verification commands, and artifact rules.
-  - Lowered the Terraform demo defaults to one `t3.small` node (min 1, max 2) and documented the approximate monthly cost; `t3.micro` is documented as too small for EKS system pods.
+  - Set the Terraform practice defaults to two `t3.small` nodes (min 1, max 2) on EKS 1.35 and documented the approximate cost; `t3.micro` is documented as too small for EKS system pods.
 - Verification run:
   - `./scripts/verify-terraform.sh`
   - `terraform fmt -check -recursive`
@@ -114,7 +114,7 @@ chat history is not.
   - `docker compose ps` and `curl http://localhost:8080/health`
 - Evidence captured:
   - Plan: 35 to add, 0 to change, 0 to destroy; includes VPC, subnets, EKS, node group, ECR, RDS, IAM, security groups, and outputs.
-  - Cost profile: approximately $137/month in `us-east-1` plus data transfer and taxes; EKS control plane and NAT gateway are the largest fixed costs.
+  - Cost profile: approximately $157/month or $0.22/hour in `us-east-1` plus data transfer and taxes; EKS control plane and NAT gateway are the largest fixed costs.
   - Missing password and out-of-range node count both fail before creating resources.
   - Terraform provider 6.71.0, validated by Terraform 1.14.5.
   - Local stack remains healthy; `GET /health` returns 200.
@@ -124,3 +124,33 @@ chat history is not.
 - Files or artifacts updated: `infra/terraform/`, `scripts/verify-terraform.sh`, `.github/workflows/verify.yml`, `README.md`, `openspec/architecture/system-context.md`, `openspec/changes/provision-aws-eks-terraform/`, `feature_list.json`, `progress.md`, `session-handoff.md`
 - Known risk or unresolved issue: single NAT gateway and single-AZ RDS are development defaults; remote state and application deployment remain follow-ups.
 - Next best step: keep the application local; deploy to AWS only when the account owner approves the cost, then add the Kubernetes deployment manifests as a separate change.
+
+### Session 005
+
+- Date: 2026-10-30
+- Goal: Deploy the AWS infrastructure and the `withdrawal-soles` application to EKS for a short practice session.
+- Completed:
+  - Applied the Terraform stack in `us-east-1`: VPC, 2 nodes, EKS 1.35, ECR, and private RDS PostgreSQL 15.
+  - Fixed the EKS security-group egress rules and the EKS-managed cluster security-group rules so nodes could join.
+  - Set EKS support type to `STANDARD` and resolved the Free Tier RDS restriction with backup retention `0` and 20 GiB storage.
+  - Rebooted the nodes after the network fix; both nodes reached `Ready`.
+  - Built and pushed image `205346659030.dkr.ecr.us-east-1.amazonaws.com/app-nube-2-dev/withdrawal-soles:3aac6c0`.
+  - Deployed `withdrawal-soles` with 2 replicas, `mock-dependencies`, the migration Job, and the database Secret in namespace `withdrawal-soles`.
+  - Exposed the app locally through `kubectl port-forward` on port `18080`.
+  - Added `scripts/deploy-eks-demo.sh` so the same image build, migration, and deployment can be repeated.
+- Verification run:
+  - `terraform plan -detailed-exitcode`: no changes after apply
+  - `kubectl get nodes`: 2 nodes Ready on Kubernetes 1.35
+  - `kubectl -n withdrawal-soles get pods`: 2/2 app replicas, mock running, migration completed
+  - `curl http://localhost:18080/health`: 200 `{"status":"ok"}`
+  - `curl http://localhost:18080/docs`: 200
+  - `POST http://localhost:18080/api/v1/withdrawals`: 201 `COMPLETED`, transaction `ce802eb6-e775-473a-8620-f46e4a873caf`
+- Evidence captured:
+  - `eks_cluster_endpoint`: `https://B8BE7639DC6933DD4E345A8D1EE0E5AE.gr7.us-east-1.eks.amazonaws.com`
+  - `rds_endpoint`: `app-nube-2-dev-postgres.c2fc66is431b.us-east-1.rds.amazonaws.com:5432`
+  - No public application IP: the app Service is `ClusterIP`; the NAT gateway public IP is outbound-only.
+  - Approximate running cost: ~$0.22/hour plus data transfer.
+- Commits: pending (AWS deployment and Terraform fixes)
+- Files or artifacts updated: `infra/terraform/`, `src/withdrawal_soles/main.py`, `docker-compose.yml`, `tests/`, `docs/withdrawal-soles.md`, `feature_list.json`, `progress.md`, `session-handoff.md`
+- Known risk or unresolved issue: the stack is running and billing; no LoadBalancer/public URL was created.
+- Next best step: practice against `http://localhost:18080/docs`, then run `terraform destroy` and confirm the EKS, EC2, NAT, and RDS resources are gone.

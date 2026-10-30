@@ -35,7 +35,7 @@ resource "aws_db_instance" "this" {
   instance_class = var.db_instance_class
 
   allocated_storage     = var.db_allocated_storage
-  max_allocated_storage = 100
+  max_allocated_storage = var.db_allocated_storage
   storage_type          = "gp3"
   storage_encrypted     = true
 

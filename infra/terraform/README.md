@@ -67,21 +67,23 @@ group, ECR repository, RDS instance, security groups, IAM roles, and outputs.
 
 ## Cost profile
 
-The defaults are sized for a local demo, not production. Approximate
-`us-east-1` on-demand prices, excluding data transfer and taxes:
+The defaults are sized for a short practice deployment, not production.
+Approximate `us-east-1` on-demand prices, excluding data transfer and taxes:
 
 | Resource | Default | Approx. monthly |
 | --- | --- | --- |
 | EKS control plane | 1 cluster | ~$73 |
 | NAT gateway | 1 | ~$33 plus data |
-| EC2 worker | 1 × `t3.small` | ~$15 |
+| Public IPv4 for NAT | 1 | ~$3.60 |
+| EC2 workers | 2 × `t3.small` | ~$30 |
 | RDS PostgreSQL | 1 × `db.t4g.micro` | ~$12 |
 | RDS gp3 storage | 20 GiB | ~$2.30 |
-| Node EBS volume | 20 GiB | ~$1.60 |
+| Node EBS volumes | 2 × 20 GiB | ~$3.20 |
 | ECR storage | image size | usage-based |
 
-**Rough total: ~$137/month plus data transfer and taxes.** The EKS control
-plane and NAT gateway dominate the bill and are charged even while idle.
+**Rough total: ~$157/month plus data transfer and taxes.** For short
+sessions, that is about **$0.22/hour** or **~$5.20/day**. The EKS control plane
+and NAT gateway dominate the bill and are charged even while idle.
 
 `t3.small` is the smallest practical EKS worker. `t3.micro` has only 1 GiB of
 RAM and is likely to run out of memory with the VPC CNI, CoreDNS, kube-proxy,
@@ -141,12 +143,35 @@ Tags are immutable, so use a unique tag such as the Git commit SHA.
 
 ## Database connection
 
+> **Free Tier note:** the default `db_backup_retention_period` is `0` because
+> Free Tier accounts reject longer retention. Enable backups only after
+> upgrading the account plan.
+
 The RDS instance is private. Use the endpoint output from a workload inside the
 VPC or through a controlled tunnel. The service expects:
 
 ```text
 postgresql+asyncpg://withdrawal:<password>@<rds_endpoint>/withdrawal_soles_db
 ```
+
+## Deploy the demo application
+
+After an approved apply, deploy the service and its local dependency stub:
+
+```bash
+./scripts/deploy-eks-demo.sh
+```
+
+The script builds and pushes the image, runs the Alembic migration Job, creates
+the database Secret, and deploys two `withdrawal-soles` replicas plus
+`mock-dependencies`. It does not create a LoadBalancer. Access the app with:
+
+```bash
+kubectl -n withdrawal-soles port-forward svc/withdrawal-soles 18080:80
+```
+
+Then open `http://localhost:18080/docs`. The script reads the database password
+from the ignored `infra/terraform/terraform.tfvars`; no secret is committed.
 
 ## Destroy
 

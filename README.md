@@ -56,9 +56,10 @@ AWS credentials:
 ./scripts/verify-terraform.sh
 ```
 
-A credentialed `terraform plan` is expected before any approved apply. This
-repository does not deploy the application or create AWS resources
-automatically.
+A credentialed `terraform plan` is expected before any approved apply. After an
+approved apply, `./scripts/deploy-eks-demo.sh` builds and pushes the image and
+deploys the demo application plus its local dependency stub. This repository
+does not create AWS resources automatically.
 
 ## Spec-driven workflow
 

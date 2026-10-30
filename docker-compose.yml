@@ -30,7 +30,7 @@ services:
       uvicorn withdrawal_soles.main:app --host 0.0.0.0 --port 8000"
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.withdrawals.rule=PathPrefix(`/api/v1/withdrawals`) || Path(`/health`)"
+      - "traefik.http.routers.withdrawals.rule=PathPrefix(`/api/v1/withdrawals`) || Path(`/`) || Path(`/health`) || PathPrefix(`/docs`) || Path(`/openapi.json`)"
       - "traefik.http.routers.withdrawals.entrypoints=web"
       - "traefik.http.services.withdrawals.loadbalancer.server.port=8000"
 

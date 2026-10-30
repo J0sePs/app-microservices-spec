@@ -205,6 +205,15 @@ async def test_cancel_pending_is_idempotent(client, session) -> None:
     assert second.json()["status"] == "REJECTED"
 
 
+async def test_root_returns_service_links(client) -> None:
+    response = await client.get("/")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["service"] == "withdrawal-soles"
+    assert body["docs"] == "/docs"
+    assert body["health"] == "/health"
+
+
 async def test_health_ok(client) -> None:
     response = await client.get("/health")
     assert response.status_code == 200

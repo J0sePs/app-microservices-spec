@@ -49,13 +49,13 @@ variable "availability_zone_count" {
 }
 
 variable "kubernetes_version" {
-  description = "EKS Kubernetes version."
+  description = "EKS Kubernetes version. Use a version in standard support to avoid extended-support charges."
   type        = string
-  default     = "1.33"
+  default     = "1.35"
 
   validation {
     condition     = can(regex("^1\\.[0-9]{2}$", var.kubernetes_version))
-    error_message = "kubernetes_version must look like 1.33."
+    error_message = "kubernetes_version must look like 1.35."
   }
 }
 
@@ -82,9 +82,9 @@ variable "node_min_size" {
 }
 
 variable "node_desired_size" {
-  description = "Desired number of worker nodes. One node is enough for a development demo."
+  description = "Desired number of worker nodes. Two nodes allow replica and rolling-update practice."
   type        = number
-  default     = 1
+  default     = 2
 
   validation {
     condition     = var.node_desired_size >= 1
@@ -160,9 +160,9 @@ variable "db_multi_az" {
 }
 
 variable "db_backup_retention_period" {
-  description = "Number of days to retain RDS backups."
+  description = "Number of days to retain RDS backups. Free Tier accounts require 0."
   type        = number
-  default     = 7
+  default     = 0
 
   validation {
     condition     = var.db_backup_retention_period >= 0 && var.db_backup_retention_period <= 35

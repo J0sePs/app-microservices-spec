@@ -15,6 +15,10 @@ resource "aws_eks_cluster" "this" {
     bootstrap_cluster_creator_admin_permissions = true
   }
 
+  upgrade_policy {
+    support_type = "STANDARD"
+  }
+
   enabled_cluster_log_types = [
     "api",
     "audit",
@@ -101,6 +105,11 @@ resource "aws_eks_node_group" "this" {
     aws_iam_role_policy_attachment.node_amazon_eks_worker_node_policy,
     aws_iam_role_policy_attachment.node_amazon_eks_cni_policy,
     aws_iam_role_policy_attachment.node_amazon_ecr_read_only,
+    aws_security_group_rule.cluster_ingress_nodes_https,
+    aws_security_group_rule.cluster_ingress_nat_https,
+    aws_security_group_rule.eks_cluster_ingress_nodes_https,
+    aws_security_group_rule.eks_cluster_ingress_nat_https,
+    aws_security_group_rule.nodes_ingress_eks_cluster_ephemeral,
   ]
 
   lifecycle {
