@@ -11,6 +11,7 @@ erDiagram
     WITHDRAWAL_OPERATIONS {
         uuid id PK
         uuid account_id "external ref: user_db.accounts.id"
+        uuid user_id "external ref: user_db.users.id"
         numeric amount "10.00 to 5000.00"
         string currency "PEN"
         string status "PENDING, APPROVED, REJECTED, COMPLETED, or FAILED"
@@ -60,6 +61,8 @@ erDiagram
 - `idempotency_records.idempotency_key` is unique.
 - `withdrawal_operations.account_id` is an external reference to
   `user_db.accounts.id`.
+- `withdrawal_operations.user_id` is an external reference to
+  `user_db.users.id`; it stores the authenticated owner for read isolation.
 - `reporting_attempts.transaction_id` is an external reference to
   `transaction_db.transactions.id`.
 

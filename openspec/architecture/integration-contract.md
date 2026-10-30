@@ -59,7 +59,9 @@ Required headers: `X-User-Id`, `Idempotency-Key`, `Content-Type`.
 ```
 
 The service fixes `currency` to `PEN`. A first submission returns `201`; a
-replay with the same key and body returns `200` with the same body.
+replay with the same key and body returns `200` with the same body. The create
+response is `COMPLETED` when the ledger accepts the report and `APPROVED` when
+reporting must be retried.
 
 ```json
 {
@@ -93,6 +95,15 @@ Required headers: `X-User-Id`, `Idempotency-Key`, `Content-Type`.
 Only `PENDING` operations can be cancelled. Returns `200` with status
 `REJECTED`; an already cancelled operation returns the same result. A
 non-pending operation returns `409`.
+
+### Retry reporting
+
+`POST /api/v1/withdrawals/{id}/report`
+
+Required headers: `X-User-Id`, `Idempotency-Key`. Only the owner can retry an
+`APPROVED` operation. Returns `200` with `COMPLETED` when the ledger accepts the
+report, or `202` with `APPROVED` when the report still fails. A completed
+operation returns `200` unchanged; any other status returns `409`.
 
 ### Health
 

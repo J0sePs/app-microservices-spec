@@ -34,6 +34,17 @@ Architecture documentation lives in `openspec/architecture/` and is the source
 of truth for humans and agents. It includes a system-level mermaid diagram and
 one ERD per microservice.
 
+## withdrawal-soles service
+
+The only implemented service in this repository is `withdrawal-soles`. See
+[docs/withdrawal-soles.md](docs/withdrawal-soles.md) for setup, API examples,
+migrations, and Docker Compose instructions.
+
+```bash
+make install && make verify   # Python service checks
+docker compose up --build      # PostgreSQL + Traefik + service + local stubs
+```
+
 ## Spec-driven workflow
 
 This repository uses the OpenSpec + five-subsystem harness. Read `AGENTS.md`

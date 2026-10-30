@@ -39,6 +39,13 @@ elif [ -f yarn.lock ]; then
 elif [ -f bun.lockb ] || [ -f bun.lock ]; then
   echo "==> Installing dependencies (bun install --frozen-lockfile)"
   bun install --frozen-lockfile
+elif [ -f pyproject.toml ] && command -v python3 >/dev/null 2>&1; then
+  echo "==> Installing Python dependencies (.venv)"
+  if [ ! -x .venv/bin/python ]; then
+    python3 -m venv .venv
+  fi
+  .venv/bin/pip install --upgrade pip >/dev/null
+  .venv/bin/pip install -e ".[dev]"
 elif [ -f package.json ]; then
   echo "==> Installing dependencies (npm install)"
   npm install

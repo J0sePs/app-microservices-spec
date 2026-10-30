@@ -44,8 +44,8 @@
       "area": "withdrawal-soles",
       "title": "PEN withdrawal service is implemented and tested",
       "user_visible_behavior": "An authenticated client can create, query, and cancel PEN withdrawal requests with idempotency, domain limits, and transaction reporting.",
-      "status": "not_started",
-      "change": null,
+      "status": "passing",
+      "change": "implement-withdrawal-soles",
       "verification": [
         "Run the withdrawal-soles pytest suite and confirm all tests pass.",
         "Start the service and confirm GET /health returns 200.",
@@ -53,7 +53,19 @@
         "Replay the same Idempotency-Key and confirm no duplicate operation is created.",
         "Run ./init.sh and record the result."
       ],
-      "evidence": [],
+      "evidence": [
+        ".venv/bin/pytest: 54 passed in 3.17s (unit, application, API, adapter, and repository suites)",
+        ".venv/bin/ruff check src tests tools: All checks passed!",
+        "openspec validate implement-withdrawal-soles --strict: Change is valid",
+        "./init.sh: VERIFICATION PASSED, 5/5 harness subsystems and 16/16 checks",
+        "docker compose config --quiet: valid compose configuration",
+        "docker image build and compose stack start: db (PostgreSQL 15), withdrawal-soles, mock-dependencies, and traefik running",
+        "GET http://localhost:8080/health through Traefik: 200 {\"status\":\"ok\"}",
+        "POST http://localhost:8080/api/v1/withdrawals with Idempotency-Key demo-e2e-1: 201 Created, status COMPLETED, transaction_id aa3e255f-40b0-4054-80ee-0e637cb30060",
+        "Replay with Idempotency-Key demo-e2e-1: 200 OK with the same withdrawal id 14544b68-9c70-4365-bd40-6ba0824bba15 and no duplicate operation",
+        "Alembic upgrade head against compose PostgreSQL 15: withdrawal_operations, withdrawal_status_history, idempotency_records, reporting_attempts, and alembic_version created",
+        "Traefik dashboard API: withdrawals@docker and mock-dependencies@docker routers enabled"
+      ],
       "notes": "Only this service is implemented in this repository."
     },
     {

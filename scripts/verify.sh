@@ -56,6 +56,14 @@ if [ -z "$PROJECT_VERIFY_CMD" ] && [ -f package.json ] && command -v node >/dev/
   fi
 fi
 
+if [ -z "$PROJECT_VERIFY_CMD" ] && [ -f pyproject.toml ]; then
+  if [ -x .venv/bin/ruff ] && [ -x .venv/bin/pytest ]; then
+    PROJECT_VERIFY_CMD=".venv/bin/ruff check src tests tools && .venv/bin/pytest"
+  elif command -v python3 >/dev/null 2>&1 && python3 -c "import pytest" >/dev/null 2>&1; then
+    PROJECT_VERIFY_CMD="python3 -m pytest"
+  fi
+fi
+
 if [ -n "$PROJECT_VERIFY_CMD" ]; then
   run_step "Project verification" bash -c "$PROJECT_VERIFY_CMD"
 else

@@ -5,7 +5,7 @@
 | `user-service` | Customer identity and bank account ownership | `user_db` | `GET /api/v1/accounts/{account_id}`, `GET /api/v1/accounts/{account_id}/ownership` |
 | `deposit-soles` | Deposit operations in PEN | `deposit_soles_db` | `POST /api/v1/deposits`, `GET /api/v1/deposits/{id}` |
 | `deposit-dollars` | Deposit operations in USD | `deposit_dollars_db` | `POST /api/v1/deposits`, `GET /api/v1/deposits/{id}` |
-| `withdrawal-soles` | Withdrawal operations in PEN | `withdrawal_soles_db` | `POST /api/v1/withdrawals`, `GET /api/v1/withdrawals/{id}`, `POST /api/v1/withdrawals/{id}/cancel` |
+| `withdrawal-soles` | Withdrawal operations in PEN | `withdrawal_soles_db` | `POST /api/v1/withdrawals`, `GET /api/v1/withdrawals`, `GET /api/v1/withdrawals/{id}`, `POST /api/v1/withdrawals/{id}/cancel`, `POST /api/v1/withdrawals/{id}/report` |
 | `withdrawal-dollars` | Withdrawal operations in USD | `withdrawal_dollars_db` | `POST /api/v1/withdrawals`, `GET /api/v1/withdrawals/{id}`, `POST /api/v1/withdrawals/{id}/cancel` |
 | `transaction-service` | Unified transaction ledger | `transaction_db` | `POST /api/v1/transactions`, `GET /api/v1/transactions/{id}` |
 

@@ -1,0 +1,66 @@
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: withdrawal_soles_db
+      POSTGRES_USER: withdrawal
+      POSTGRES_PASSWORD: withdrawal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U withdrawal -d withdrawal_soles_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "55432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  withdrawal-soles:
+    build: .
+    environment:
+      WITHDRAWAL_SOLES_DATABASE_URL: postgresql+asyncpg://withdrawal:withdrawal@db:5432/withdrawal_soles_db
+      WITHDRAWAL_SOLES_USER_SERVICE_URL: http://traefik
+      WITHDRAWAL_SOLES_TRANSACTION_SERVICE_URL: http://traefik
+      WITHDRAWAL_SOLES_BUSINESS_TIMEZONE: America/Lima
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "alembic upgrade head &&
+      uvicorn withdrawal_soles.main:app --host 0.0.0.0 --port 8000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.withdrawals.rule=PathPrefix(`/api/v1/withdrawals`) || Path(`/health`)"
+      - "traefik.http.routers.withdrawals.entrypoints=web"
+      - "traefik.http.services.withdrawals.loadbalancer.server.port=8000"
+
+  mock-dependencies:
+    build: .
+    command: uvicorn tools.mock_dependencies:app --host 0.0.0.0 --port 8001
+    healthcheck:
+      disable: true
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mock-dependencies.rule=PathPrefix(`/api/v1/accounts`) || PathPrefix(`/api/v1/transactions`)"
+      - "traefik.http.routers.mock-dependencies.entrypoints=web"
+      - "traefik.http.routers.mock-dependencies.service=mock-dependencies"
+      - "traefik.http.services.mock-dependencies.loadbalancer.server.port=8001"
+
+  traefik:
+    image: traefik:v3.0
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "8080:80"
+      - "8081:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    depends_on:
+      - withdrawal-soles
+      - mock-dependencies
+
+volumes:
+  pgdata:
