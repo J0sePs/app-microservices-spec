@@ -104,6 +104,16 @@ curl -X POST http://localhost:8080/api/v1/withdrawals/<id>/report \
   -H "Idempotency-Key: report-1"
 ```
 
+### OpenAPI contract
+
+The generated contract is checked in at [`openapi.yaml`](../openapi.yaml). It
+matches the running FastAPI app, including required headers and error
+responses. Regenerate it after changing routes or schemas:
+
+```bash
+make openapi
+```
+
 ### Endpoints
 
 | Method | Path | Purpose |

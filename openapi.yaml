@@ -1,0 +1,571 @@
+openapi: 3.1.0
+info:
+  title: withdrawal-soles API
+  description: 'PEN withdrawal microservice for the banking platform.
+
+
+    Every request carries the gateway-injected `X-User-Id` header. Every mutating request also requires
+    an `Idempotency-Key`. Amounts are decimal strings in PEN; the minimum is 10.00, the maximum per operation
+    is 5000.00, and the daily accumulated limit per account is 10000.00.'
+  version: 0.1.0
+  contact:
+    name: app-nube-2
+    url: https://github.com/J0sePs/app-nube-2
+paths:
+  /api/v1/withdrawals:
+    post:
+      tags:
+      - withdrawals
+      summary: Create a PEN withdrawal
+      operationId: createWithdrawal
+      parameters:
+      - name: X-User-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Caller identity injected by the API gateway. Must be a UUID.
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+        description: Client-generated key that makes the mutation safe to retry. Reuse the same key for
+          the same request; reusing it with a different payload returns 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WithdrawalCreate'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WithdrawalResponse'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Conflict
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Service Unavailable
+        '200':
+          description: Idempotent replay of a stored request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WithdrawalResponse'
+      description: Validate the account, enforce the per-operation and daily limits, persist the operation,
+        and report it to transaction-service.
+    get:
+      tags:
+      - withdrawals
+      summary: List owned withdrawals
+      operationId: listWithdrawals
+      parameters:
+      - name: account_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Account Id
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - $ref: '#/components/schemas/WithdrawalStatus'
+          - type: 'null'
+          title: Status
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 100
+          minimum: 1
+          default: 20
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      - name: X-User-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Caller identity injected by the API gateway. Must be a UUID.
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WithdrawalListResponse'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Conflict
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Service Unavailable
+      description: Return only operations owned by the caller, with optional filters and pagination.
+  /api/v1/withdrawals/{withdrawal_id}:
+    get:
+      tags:
+      - withdrawals
+      summary: Read one owned withdrawal
+      operationId: getWithdrawal
+      parameters:
+      - name: withdrawal_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Withdrawal Id
+      - name: X-User-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Caller identity injected by the API gateway. Must be a UUID.
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WithdrawalResponse'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Conflict
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Service Unavailable
+      description: Return one operation when it belongs to the caller.
+  /api/v1/withdrawals/{withdrawal_id}/cancel:
+    post:
+      tags:
+      - withdrawals
+      summary: Cancel a pending withdrawal
+      operationId: cancelWithdrawal
+      parameters:
+      - name: withdrawal_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Withdrawal Id
+      - name: X-User-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Caller identity injected by the API gateway. Must be a UUID.
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+        description: Client-generated key that makes the mutation safe to retry. Reuse the same key for
+          the same request; reusing it with a different payload returns 409.
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WithdrawalResponse'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Conflict
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Service Unavailable
+      description: Reject a PENDING operation. Repeating the request is idempotent.
+  /api/v1/withdrawals/{withdrawal_id}/report:
+    post:
+      tags:
+      - withdrawals
+      summary: Retry ledger reporting
+      operationId: retryWithdrawalReport
+      parameters:
+      - name: withdrawal_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Withdrawal Id
+      - name: X-User-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Caller identity injected by the API gateway. Must be a UUID.
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+        description: Client-generated key that makes the mutation safe to retry. Reuse the same key for
+          the same request; reusing it with a different payload returns 409.
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WithdrawalResponse'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Conflict
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Service Unavailable
+        '202':
+          description: Reporting is still pending
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WithdrawalResponse'
+      description: Retry reporting for an APPROVED operation. Returns 200 when the operation becomes COMPLETED
+        and 202 when the ledger still fails.
+  /health:
+    get:
+      tags:
+      - health
+      summary: Check database readiness
+      description: Return 200 when the database is reachable and 503 otherwise.
+      operationId: health
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Database unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+components:
+  schemas:
+    ErrorResponse:
+      properties:
+        code:
+          type: string
+          title: Code
+        message:
+          type: string
+          title: Message
+        details:
+          additionalProperties: true
+          type: object
+          title: Details
+      type: object
+      required:
+      - code
+      - message
+      - details
+      title: ErrorResponse
+      description: Stable error envelope returned by every failing endpoint.
+    HealthResponse:
+      properties:
+        status:
+          type: string
+          title: Status
+      type: object
+      required:
+      - status
+      title: HealthResponse
+      description: Health response body.
+    WithdrawalCreate:
+      properties:
+        account_id:
+          type: string
+          format: uuid
+          title: Account Id
+        amount:
+          anyOf:
+          - type: number
+          - type: string
+          title: Amount
+          description: Amount in PEN as a decimal string with at most two decimal places. Minimum 10.00,
+            maximum 5000.00 per operation.
+          examples:
+          - '250.00'
+      additionalProperties: false
+      type: object
+      required:
+      - account_id
+      - amount
+      title: WithdrawalCreate
+      description: Payload for creating a PEN withdrawal.
+    WithdrawalListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/WithdrawalResponse'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        limit:
+          type: integer
+          title: Limit
+        offset:
+          type: integer
+          title: Offset
+      type: object
+      required:
+      - items
+      - total
+      - limit
+      - offset
+      title: WithdrawalListResponse
+      description: Paginated withdrawal list.
+    WithdrawalResponse:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        account_id:
+          type: string
+          format: uuid
+          title: Account Id
+        amount:
+          type: string
+          title: Amount
+        currency:
+          type: string
+          title: Currency
+        status:
+          $ref: '#/components/schemas/WithdrawalStatus'
+        transaction_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Transaction Id
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+      type: object
+      required:
+      - id
+      - account_id
+      - amount
+      - currency
+      - status
+      - transaction_id
+      - created_at
+      - updated_at
+      title: WithdrawalResponse
+      description: Public representation of a withdrawal.
+      example:
+        id: 14544b68-9c70-4365-bd40-6ba0824bba15
+        account_id: 1c7a5e0e-4f4a-4a1f-9a3e-7b9f0d2a6c11
+        amount: '250.00'
+        currency: PEN
+        status: COMPLETED
+        transaction_id: aa3e255f-40b0-4054-80ee-0e637cb30060
+        created_at: '2026-10-30T17:56:55.809071Z'
+        updated_at: '2026-10-30T17:56:55.824911Z'
+    WithdrawalStatus:
+      type: string
+      enum:
+      - PENDING
+      - APPROVED
+      - REJECTED
+      - COMPLETED
+      - FAILED
+      title: WithdrawalStatus
+      description: Lifecycle states allowed for a withdrawal.
+servers:
+- url: http://localhost:8080
+  description: Local Docker Compose through Traefik
+- url: http://localhost:18080
+  description: EKS through kubectl port-forward
+tags:
+- name: withdrawals
+  description: Create, list, read, cancel, and report PEN withdrawals.
+- name: health
+  description: Database readiness for orchestration and the gateway.

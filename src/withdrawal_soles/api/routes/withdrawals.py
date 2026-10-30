@@ -46,7 +46,13 @@ ERROR_RESPONSES = {
     "/api/v1/withdrawals",
     response_model=WithdrawalResponse,
     status_code=status.HTTP_201_CREATED,
-    responses=ERROR_RESPONSES,
+    responses={
+        **ERROR_RESPONSES,
+        200: {
+            "model": WithdrawalResponse,
+            "description": "Idempotent replay of a stored request",
+        },
+    },
 )
 async def create_withdrawal(
     payload: WithdrawalCreate,
@@ -127,7 +133,13 @@ async def cancel_withdrawal(
 @router.post(
     "/api/v1/withdrawals/{withdrawal_id}/report",
     response_model=WithdrawalResponse,
-    responses=ERROR_RESPONSES,
+    responses={
+        **ERROR_RESPONSES,
+        202: {
+            "model": WithdrawalResponse,
+            "description": "Reporting is still pending",
+        },
+    },
 )
 async def retry_report(
     withdrawal_id: UUID,

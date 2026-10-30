@@ -33,6 +33,7 @@
 - Deployed `withdrawal-soles` and `mock-dependencies` to namespace
   `withdrawal-soles`.
 - Added a root route to the FastAPI app so `/` returns service links.
+- Added the generated `openapi.yaml` contract and the `make openapi` target.
 - Updated evidence, progress, and Terraform documentation.
 
 ## Broken Or Unverified

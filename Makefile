@@ -1,4 +1,4 @@
-.PHONY: install lint test fmt run migrate verify
+.PHONY: install lint test fmt run migrate verify openapi
 
 PYTHON ?= .venv/bin/python
 PIP ?= .venv/bin/pip
@@ -28,3 +28,6 @@ migrate:
 	$(ALEMBIC) upgrade head
 
 verify: lint test
+
+openapi:
+	$(PYTHON) scripts/export_openapi.py

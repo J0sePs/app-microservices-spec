@@ -156,3 +156,25 @@ chat history is not.
 - Files or artifacts updated: `infra/terraform/`, `src/withdrawal_soles/main.py`, `docker-compose.yml`, `tests/`, `docs/withdrawal-soles.md`, `feature_list.json`, `progress.md`, `session-handoff.md`
 - Known risk or unresolved issue: the stack is running and billing, now including the LoadBalancer; the public endpoint has no gateway authentication and trusts `X-User-Id`, so it is practice-only.
 - Next best step: practice against `http://localhost:18080/docs`, then run `terraform destroy` and confirm the EKS, EC2, NAT, and RDS resources are gone.
+
+### Session 006
+
+- Date: 2026-10-30
+- Goal: Export the application HTTP contract as an OpenAPI document.
+- Completed:
+  - Added `scripts/export_openapi.py` to generate `openapi.yaml` from the FastAPI app.
+  - Added the `make openapi` target.
+  - Documented required `X-User-Id` and `Idempotency-Key` headers, the error envelope, the 200 idempotent-replay response, the 202 report response, and the health schemas.
+  - Added response models and documented 200/202/503 responses in the routes.
+- Verification run:
+  - `make openapi`
+  - YAML parse and operation inventory: 6 operations with the expected required headers and response codes
+  - `make verify`: 55 passed, ruff clean
+  - `./init.sh`
+- Evidence captured:
+  - `openapi.yaml` at the repository root, OpenAPI 3.1.0.
+  - Operations: create, list, get, cancel, retry report, and health.
+- Commits: pending (OpenAPI contract)
+- Files or artifacts updated: `openapi.yaml`, `scripts/export_openapi.py`, `Makefile`, `docs/withdrawal-soles.md`, `src/withdrawal_soles/api/routes/health.py`, `src/withdrawal_soles/api/routes/withdrawals.py`, `feature_list.json`, `progress.md`, `session-handoff.md`
+- Known risk or unresolved issue: none.
+- Next best step: use the contract for client generation or review the public EKS deployment, then destroy the AWS practice stack when finished.

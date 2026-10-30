@@ -54,7 +54,8 @@
         "Run ./init.sh and record the result."
       ],
       "evidence": [
-        ".venv/bin/pytest: 54 passed in 3.17s (unit, application, API, adapter, and repository suites)",
+        ".venv/bin/pytest: 55 passed (unit, application, API, adapter, and repository suites)",
+        "openapi.yaml: generated from the FastAPI app with all 6 operations, required X-User-Id and Idempotency-Key headers, error envelope, 200 replay, and 202 report response; regenerate with make openapi",
         ".venv/bin/ruff check src tests tools: All checks passed!",
         "openspec validate implement-withdrawal-soles --strict: Change is valid",
         "./init.sh: VERIFICATION PASSED, 5/5 harness subsystems and 16/16 checks",
