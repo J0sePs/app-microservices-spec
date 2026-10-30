@@ -1,15 +1,84 @@
 schema: spec-driven
 
 context: |
-  This repository is a reusable template for spec-driven development with
-  OpenSpec and a five-subsystem coding-agent harness.
+  Project: app-nube-2
+  A banking platform built from independent microservices for PEN (soles) and
+  USD (dollars) operations. This repository implements the `withdrawal-soles`
+  service and documents the architecture that surrounds it.
 
-  All OpenSpec artifacts must be written in English.
-  Every change must be scoped to one active feature in feature_list.json.
-  A change is not complete until scripts/verify.sh passes and evidence is
-  recorded in feature_list.json.
-  Do not edit openspec/specs/ directly; archive changes to update specs.
-  Keep the root AGENTS.md short; put detail in docs/ and read it on demand.
+  Product scope
+  - The platform covers four domains: user, deposit, withdrawal, and
+    transaction, split by currency into six services:
+    `user-service`, `deposit-soles`, `deposit-dollars`, `withdrawal-soles`,
+    `withdrawal-dollars`, and `transaction-service`.
+  - Only `withdrawal-soles` is implemented in this repository. The other five
+    services are external contracts and must not be implemented here.
+  - `context.md` is the project source of truth for scope, service inventory,
+    conventions, and domain rules.
+
+  Technology stack
+  - Python 3.11+ with FastAPI, Pydantic, and Uvicorn.
+  - PostgreSQL 15 with SQLAlchemy 2.0 async and Alembic.
+  - Docker and Docker Compose for the local topology.
+  - Traefik v3 as the single HTTP gateway.
+  - pytest, pytest-asyncio, httpx, and respx for tests.
+  - GitHub Actions for CI.
+  - Terraform 1.9+ with the AWS provider for the target AWS topology.
+
+  Architecture rules
+  - Hexagonal layout: `api/`, `application/`, `domain/`, `infrastructure/`,
+    and `core/`. Dependencies point inward; the domain imports no framework.
+  - Database per service. No service reads or writes another service's
+    database. Store foreign identifiers as values, never as database foreign
+    keys.
+  - All external and inter-service HTTP traffic goes through Traefik.
+  - Authentication is delegated to the gateway. The service receives the
+    caller identity in `X-User-Id`.
+  - Every mutating endpoint requires an `Idempotency-Key`.
+  - Errors use the envelope `{"code", "message", "details"}`.
+  - Architecture documents live in `openspec/architecture/`: one system
+    context diagram, one ERD per service, and the integration contract.
+
+  Domain rules for withdrawal-soles
+  - Process PEN withdrawals only.
+  - Minimum per operation: S/ 10.00.
+  - Maximum per operation: S/ 5,000.00.
+  - Daily accumulated limit per account: S/ 10,000.00.
+  - Statuses: PENDING, APPROVED, REJECTED, COMPLETED, FAILED.
+  - Validate account ownership, currency, and status with `user-service`
+    before approving.
+  - Report every approved operation to `transaction-service`; a failed report
+    leaves the operation APPROVED and can be retried.
+  - The daily window uses the `America/Lima` business timezone.
+
+  Infrastructure
+  - Local: Docker Compose with PostgreSQL 15, the service, Traefik, and local
+    dependency stubs. PostgreSQL is published on host port 55432.
+  - Target: AWS VPC, EKS cluster with a managed node group, ECR repository,
+    and private RDS PostgreSQL 15. Terraform lives in `infra/terraform/`.
+  - Never run `terraform apply` without explicit cost approval. Static checks
+    and a credentialed plan are the required verification for infrastructure
+    changes.
+
+  Verification commands
+  - `./init.sh`: install, validate the harness, validate OpenSpec, run checks.
+  - `make verify`: ruff plus pytest.
+  - `openspec validate --all --strict`: validate every spec and active change.
+  - `./scripts/verify-terraform.sh`: Terraform fmt, init, and validate.
+  - `docker compose ps` and `curl http://localhost:8080/health`: local smoke.
+  - Never weaken, skip, or rewrite verification to make work pass.
+
+  Artifact rules
+  - Write all OpenSpec artifacts in English.
+  - Every change must be scoped to exactly one active feature in
+    `feature_list.json`, and that feature points to the change directory.
+  - Do not edit `openspec/specs/` directly. Archive a completed change to
+    update the main specs.
+  - A feature is `passing` only after its verification ran and evidence is
+    recorded in `feature_list.json`.
+  - Update `progress.md` and `session-handoff.md` before ending a session.
+  - Keep the root `AGENTS.md` short; put detail in `docs/` and
+    `openspec/architecture/` and read it on demand.
 
 rules:
   proposal:
@@ -19,12 +88,14 @@ rules:
   specs:
     - "Write requirements as testable SHALL/MUST statements with WHEN/THEN scenarios."
     - "Describe externally observable behavior, not implementation details."
+    - "Give every requirement at least one scenario and keep descriptions under 500 characters."
   design:
-    - "Record decisions and trade-offs; skip this file only when the change is trivial."
+    - "Record decisions, alternatives considered, and trade-offs."
+    - "Skip this file only when the change is trivial."
   tasks:
     - "Keep each task small enough to complete in one session."
     - "Every task must state how completion is verified."
-    - "Group tests and documentation with the work they belong to."
+    - "Group tests and documentation with the work they belong to; reserve the final group for integration checks."
 
 operations:
   apply:
@@ -33,6 +104,7 @@ operations:
       - "Work on exactly one active feature and one active change."
       - "Mark a task complete only after its verification has run."
       - "Record evidence in feature_list.json before marking a feature passing."
+      - "Keep the local compose stack working; do not deploy to AWS without approval."
   archive:
     guidance:
       - "Run ./init.sh and confirm it passes before archiving."
