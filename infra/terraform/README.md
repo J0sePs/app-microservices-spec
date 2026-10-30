@@ -173,6 +173,21 @@ kubectl -n withdrawal-soles port-forward svc/withdrawal-soles 18080:80
 Then open `http://localhost:18080/docs`. The script reads the database password
 from the ignored `infra/terraform/terraform.tfvars`; no secret is committed.
 
+### Public URL (optional, adds cost)
+
+To expose the demo publicly, switch the Service to `LoadBalancer`:
+
+```bash
+kubectl -n withdrawal-soles patch svc withdrawal-soles \
+  --type merge -p '{"spec":{"type":"LoadBalancer"}}'
+kubectl -n withdrawal-soles get svc withdrawal-soles -w
+```
+
+AWS creates a Classic LoadBalancer and returns a DNS name. It adds roughly
+$0.025/hour plus traffic. The demo has no gateway authentication and trusts the
+`X-User-Id` header, so this endpoint is for practice only. Remove the Service or
+run `terraform destroy` when finished.
+
 ## Destroy
 
 ```bash

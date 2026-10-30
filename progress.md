@@ -138,6 +138,7 @@ chat history is not.
   - Deployed `withdrawal-soles` with 2 replicas, `mock-dependencies`, the migration Job, and the database Secret in namespace `withdrawal-soles`.
   - Exposed the app locally through `kubectl port-forward` on port `18080`.
   - Added `scripts/deploy-eks-demo.sh` so the same image build, migration, and deployment can be repeated.
+  - Exposed the app publicly with a Classic LoadBalancer and verified `/health`, `/docs`, and a real withdrawal.
 - Verification run:
   - `terraform plan -detailed-exitcode`: no changes after apply
   - `kubectl get nodes`: 2 nodes Ready on Kubernetes 1.35
@@ -148,9 +149,10 @@ chat history is not.
 - Evidence captured:
   - `eks_cluster_endpoint`: `https://B8BE7639DC6933DD4E345A8D1EE0E5AE.gr7.us-east-1.eks.amazonaws.com`
   - `rds_endpoint`: `app-nube-2-dev-postgres.c2fc66is431b.us-east-1.rds.amazonaws.com:5432`
-  - No public application IP: the app Service is `ClusterIP`; the NAT gateway public IP is outbound-only.
+  - Public URL: `http://af7095da6a12e43adba0fe33f0c5087d-176028442.us-east-1.elb.amazonaws.com` (LoadBalancer, current IP `54.173.162.134`); the NAT gateway IP is outbound-only.
+  - Public smoke test: `GET /health` 200, `GET /docs` 200, `POST /api/v1/withdrawals` 201 `COMPLETED` with transaction `f52daa2d-d767-4d0e-959b-b0660319ce7d`.
   - Approximate running cost: ~$0.22/hour plus data transfer.
 - Commits: pending (AWS deployment and Terraform fixes)
 - Files or artifacts updated: `infra/terraform/`, `src/withdrawal_soles/main.py`, `docker-compose.yml`, `tests/`, `docs/withdrawal-soles.md`, `feature_list.json`, `progress.md`, `session-handoff.md`
-- Known risk or unresolved issue: the stack is running and billing; no LoadBalancer/public URL was created.
+- Known risk or unresolved issue: the stack is running and billing, now including the LoadBalancer; the public endpoint has no gateway authentication and trusts `X-User-Id`, so it is practice-only.
 - Next best step: practice against `http://localhost:18080/docs`, then run `terraform destroy` and confirm the EKS, EC2, NAT, and RDS resources are gone.

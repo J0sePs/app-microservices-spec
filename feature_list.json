@@ -102,10 +102,12 @@
         "GET http://localhost:18080/health through kubectl port-forward: 200 {\"status\":\"ok\"}",
         "GET http://localhost:18080/docs through kubectl port-forward: 200",
         "POST http://localhost:18080/api/v1/withdrawals with Idempotency-Key eks-demo-1: 201 Created, status COMPLETED, transaction_id ce802eb6-e775-473a-8620-f46e4a873caf",
-        "Public IP check: NAT gateway 3.210.209.202 is outbound-only; EKS nodes and RDS are private; the application Service is ClusterIP and has no public IP",
+        "NAT gateway 3.210.209.202 is outbound-only and does not accept inbound traffic",
+        "Public LoadBalancer af7095da6a12e43adba0fe33f0c5087d-176028442.us-east-1.elb.amazonaws.com (54.173.162.134): GET /health 200, GET /docs 200",
+        "POST http://af7095da6a12e43adba0fe33f0c5087d-176028442.us-east-1.elb.amazonaws.com/api/v1/withdrawals with Idempotency-Key public-demo-1: 201 Created, status COMPLETED, transaction_id f52daa2d-d767-4d0e-959b-b0660319ce7d",
         "docker compose ps and GET http://localhost:8080/health: local stack still healthy with 200 {\"status\":\"ok\"}"
       ],
-      "notes": "Deployed to AWS on 2026-10-30. The application runs in EKS with 2 replicas and is reached through kubectl port-forward; no LoadBalancer or public application IP was created. Destroy the stack to stop charges."
+      "notes": "Deployed to AWS on 2026-10-30. The application runs in EKS with 2 replicas and is publicly reachable through a Classic LoadBalancer for practice. Destroy the stack to stop EKS, NAT, RDS, and ELB charges."
     }
   ]
 }

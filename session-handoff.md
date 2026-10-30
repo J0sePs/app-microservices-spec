@@ -15,6 +15,11 @@
   `kubectl port-forward` on port `18080`.
 - A real withdrawal returned `201 COMPLETED` with transaction
   `ce802eb6-e775-473a-8620-f46e4a873caf`.
+- The app is publicly reachable at
+  `http://af7095da6a12e43adba0fe33f0c5087d-176028442.us-east-1.elb.amazonaws.com`
+  (current IP `54.173.162.134`). Public `/health` and `/docs` return 200, and a
+  public withdrawal returned `201 COMPLETED` with transaction
+  `f52daa2d-d767-4d0e-959b-b0660319ce7d`.
 - The local Docker Compose stack also remains healthy on port `8080`.
 
 ## Changed This Session
@@ -32,19 +37,20 @@
 
 ## Broken Or Unverified
 
-- No LoadBalancer or public application URL exists; the app Service is
-  `ClusterIP` and is exposed through `kubectl port-forward`.
-- Terraform uses local state; an S3 backend with locking is still required for
+- The public LoadBalancer is a practice-only endpoint with no gateway
+  authentication; the service trusts `X-User-Id`, so callers can impersonate a
+  user. Do not expose real data.
+- Terraform still uses local state; an S3 backend with locking is required for
   shared use.
 - RDS is single-AZ and the VPC has one NAT gateway; both are development
   defaults.
-- The AWS stack is running and billing approximately **$0.22/hour** plus data.
+- The AWS stack is running and billing approximately **$0.25/hour** plus data,
+  including the Classic LoadBalancer.
 
 ## Next Best Step
 
-Practice against `http://localhost:18080/docs`, then run `terraform destroy`
-and confirm EKS, EC2, NAT, and RDS are gone. If a public URL is required, add a
-`LoadBalancer` Service or an Ingress; that creates an ELB/ALB and adds cost.
+Practice against the public `/docs` endpoint, then run `terraform destroy` and
+confirm EKS, EC2, NAT, RDS, and the LoadBalancer are gone.
 
 ## Commands
 
