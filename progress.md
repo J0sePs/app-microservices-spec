@@ -178,3 +178,27 @@ chat history is not.
 - Files or artifacts updated: `openapi.yaml`, `scripts/export_openapi.py`, `Makefile`, `docs/withdrawal-soles.md`, `src/withdrawal_soles/api/routes/health.py`, `src/withdrawal_soles/api/routes/withdrawals.py`, `feature_list.json`, `progress.md`, `session-handoff.md`
 - Known risk or unresolved issue: none.
 - Next best step: use the contract for client generation or review the public EKS deployment, then destroy the AWS practice stack when finished.
+
+### Session 007
+
+- Date: 2026-10-30
+- Goal: Destroy the AWS practice stack and stop all charges.
+- Completed:
+  - Deleted the `withdrawal-soles` namespace, which removed the LoadBalancer.
+  - Deleted the ECR image and reran `terraform destroy`.
+  - Terraform destroyed the remaining ECR repository; the first destroy attempt had failed because the repository was not empty.
+  - Deleted the EKS CloudWatch log group created outside Terraform.
+  - Added `scripts/destroy-eks-demo.sh` for a clean repeatable teardown.
+- Verification run:
+  - `terraform state list`: empty
+  - `terraform output -json`: `{}`
+  - AWS checks: no EKS clusters, RDS instances, EC2 instances, NAT gateways, ELBs, ECR repositories, tagged VPCs, EBS volumes, security groups, or EKS log groups
+  - `bash -n scripts/destroy-eks-demo.sh`
+  - `./init.sh`
+- Evidence captured:
+  - NAT gateway `nat-03d65e48e2cac139e` is in `deleted` state.
+  - The remaining EIP `32.199.142.201` belongs to `machupicchu-eip`, not this stack.
+- Commits: pending (teardown and cleanup script)
+- Files or artifacts updated: `scripts/destroy-eks-demo.sh`, `infra/terraform/README.md`, `README.md`, `feature_list.json`, `progress.md`, `session-handoff.md`
+- Known risk or unresolved issue: none; no AWS resources from this stack remain.
+- Next best step: redeploy only when needed with `terraform apply` and `./scripts/deploy-eks-demo.sh`, then destroy with `./scripts/destroy-eks-demo.sh`.

@@ -106,9 +106,12 @@
         "NAT gateway 3.210.209.202 is outbound-only and does not accept inbound traffic",
         "Public LoadBalancer af7095da6a12e43adba0fe33f0c5087d-176028442.us-east-1.elb.amazonaws.com (54.173.162.134): GET /health 200, GET /docs 200",
         "POST http://af7095da6a12e43adba0fe33f0c5087d-176028442.us-east-1.elb.amazonaws.com/api/v1/withdrawals with Idempotency-Key public-demo-1: 201 Created, status COMPLETED, transaction_id f52daa2d-d767-4d0e-959b-b0660319ce7d",
+        "terraform destroy: completed after deleting the ECR image; terraform state is empty and outputs are {}",
+        "AWS post-destroy checks: no EKS clusters, RDS instances, EC2 instances, NAT gateways, ELBs, ECR repositories, VPCs, EBS volumes, or EKS log groups remain",
+        "The only remaining EIP (32.199.142.201) is tagged machupicchu-eip and is unrelated to this stack",
         "docker compose ps and GET http://localhost:8080/health: local stack still healthy with 200 {\"status\":\"ok\"}"
       ],
-      "notes": "Deployed to AWS on 2026-10-30. The application runs in EKS with 2 replicas and is publicly reachable through a Classic LoadBalancer for practice. Destroy the stack to stop EKS, NAT, RDS, and ELB charges."
+      "notes": "Deployed to AWS and then fully destroyed on 2026-10-30. The Terraform state is empty and no billable stack resources remain; the local compose stack is still available for practice."
     }
   ]
 }

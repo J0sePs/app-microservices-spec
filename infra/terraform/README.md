@@ -190,6 +190,17 @@ run `terraform destroy` when finished.
 
 ## Destroy
 
+For a clean teardown, use the helper script:
+
+```bash
+./scripts/destroy-eks-demo.sh
+```
+
+It removes the Kubernetes namespace and its LoadBalancer, deletes the ECR
+images, runs `terraform destroy`, and deletes the EKS CloudWatch log group.
+Without the script, delete the ECR images first; `force_delete` is disabled, so
+`terraform destroy` refuses to delete a non-empty repository.
+
 ```bash
 terraform destroy
 ```
