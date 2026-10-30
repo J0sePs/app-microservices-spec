@@ -60,9 +60,9 @@ variable "kubernetes_version" {
 }
 
 variable "node_instance_types" {
-  description = "Instance types for the managed node group."
+  description = "Instance types for the managed node group. t3.small is the smallest practical EKS worker; t3.micro has only 1 GiB RAM and is not recommended."
   type        = list(string)
-  default     = ["t3.medium"]
+  default     = ["t3.small"]
 
   validation {
     condition     = length(var.node_instance_types) > 0
@@ -82,9 +82,9 @@ variable "node_min_size" {
 }
 
 variable "node_desired_size" {
-  description = "Desired number of worker nodes."
+  description = "Desired number of worker nodes. One node is enough for a development demo."
   type        = number
-  default     = 2
+  default     = 1
 
   validation {
     condition     = var.node_desired_size >= 1
@@ -95,7 +95,7 @@ variable "node_desired_size" {
 variable "node_max_size" {
   description = "Maximum number of worker nodes."
   type        = number
-  default     = 3
+  default     = 2
 
   validation {
     condition     = var.node_max_size >= 1

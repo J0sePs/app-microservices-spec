@@ -65,6 +65,34 @@ The plan should report the VPC, subnets, NAT gateway, EKS cluster, managed node
 group, ECR repository, RDS instance, security groups, IAM roles, and outputs.
 `plan` does not create billable resources.
 
+## Cost profile
+
+The defaults are sized for a local demo, not production. Approximate
+`us-east-1` on-demand prices, excluding data transfer and taxes:
+
+| Resource | Default | Approx. monthly |
+| --- | --- | --- |
+| EKS control plane | 1 cluster | ~$73 |
+| NAT gateway | 1 | ~$33 plus data |
+| EC2 worker | 1 × `t3.small` | ~$15 |
+| RDS PostgreSQL | 1 × `db.t4g.micro` | ~$12 |
+| RDS gp3 storage | 20 GiB | ~$2.30 |
+| Node EBS volume | 20 GiB | ~$1.60 |
+| ECR storage | image size | usage-based |
+
+**Rough total: ~$137/month plus data transfer and taxes.** The EKS control
+plane and NAT gateway dominate the bill and are charged even while idle.
+
+`t3.small` is the smallest practical EKS worker. `t3.micro` has only 1 GiB of
+RAM and is likely to run out of memory with the VPC CNI, CoreDNS, kube-proxy,
+and the application. If you need a cheaper temporary demo, override
+`node_instance_types = ["t3.micro"]` only after testing, and destroy the stack
+when you are done.
+
+```bash
+terraform destroy
+```
+
 ## Apply
 
 > **Cost warning:** `apply` creates billable EKS, EC2, NAT gateway, and RDS

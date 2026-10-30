@@ -100,6 +100,7 @@ chat history is not.
   - Updated the root README and architecture deployment notes.
   - Archived `provision-aws-eks-terraform`; the main `aws-platform-infrastructure` spec now exists.
   - Rewrote `openspec/config.yaml` with the full project context, technology stack, architecture and domain rules, verification commands, and artifact rules.
+  - Lowered the Terraform demo defaults to one `t3.small` node (min 1, max 2) and documented the approximate monthly cost; `t3.micro` is documented as too small for EKS system pods.
 - Verification run:
   - `./scripts/verify-terraform.sh`
   - `terraform fmt -check -recursive`
@@ -113,6 +114,7 @@ chat history is not.
   - `docker compose ps` and `curl http://localhost:8080/health`
 - Evidence captured:
   - Plan: 35 to add, 0 to change, 0 to destroy; includes VPC, subnets, EKS, node group, ECR, RDS, IAM, security groups, and outputs.
+  - Cost profile: approximately $137/month in `us-east-1` plus data transfer and taxes; EKS control plane and NAT gateway are the largest fixed costs.
   - Missing password and out-of-range node count both fail before creating resources.
   - Terraform provider 6.71.0, validated by Terraform 1.14.5.
   - Local stack remains healthy; `GET /health` returns 200.

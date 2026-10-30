@@ -7,6 +7,7 @@
 - `./init.sh` passes with 5/5 harness subsystems and 16/16 checks.
 - `./scripts/verify-terraform.sh` passes: fmt, init, and validate.
 - A credentialed `terraform plan` renders 35 resources: VPC, subnets, NAT, EKS, node group, ECR, RDS, IAM, security groups, and outputs.
+- Demo defaults are one `t3.small` node (min 1, max 2) and `db.t4g.micro`; the README estimates ~$137/month plus data and taxes.
 - The local Docker Compose stack is healthy and `GET /health` returns 200.
 - No AWS resources were created; `terraform apply` was not run.
 - `provision-aws-eks-terraform` is archived as
@@ -20,6 +21,7 @@
 - Added `scripts/verify-terraform.sh` and a credential-free Terraform CI job.
 - Updated the root README and architecture deployment notes.
 - Rewrote `openspec/config.yaml` with the full project context and rules.
+- Lowered the Terraform demo defaults and documented the cost profile.
 - Archived `provision-aws-eks-terraform` and created the
   `aws-platform-infrastructure` main spec.
 
