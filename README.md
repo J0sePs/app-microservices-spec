@@ -45,6 +45,21 @@ make install && make verify   # Python service checks
 docker compose up --build      # PostgreSQL + Traefik + service + local stubs
 ```
 
+## AWS infrastructure
+
+The target AWS topology (VPC, EKS cluster, managed node group, ECR repository,
+and private RDS PostgreSQL 15) is defined in
+[`infra/terraform/`](infra/terraform/README.md). Static validation runs without
+AWS credentials:
+
+```bash
+./scripts/verify-terraform.sh
+```
+
+A credentialed `terraform plan` is expected before any approved apply. This
+repository does not deploy the application or create AWS resources
+automatically.
+
 ## Spec-driven workflow
 
 This repository uses the OpenSpec + five-subsystem harness. Read `AGENTS.md`

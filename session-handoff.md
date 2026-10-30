@@ -2,37 +2,44 @@
 
 ## Verified Now
 
-- `withdrawal-001` is `passing` with recorded evidence.
+- `withdrawal-001` and `infra-001` are `passing` with recorded evidence.
 - `make verify` passes: ruff clean and 54 tests pass.
 - `./init.sh` passes with 5/5 harness subsystems and 16/16 checks.
-- The compose stack runs PostgreSQL 15, `withdrawal-soles`, `mock-dependencies`, and Traefik.
-- `GET /health` returns 200, withdrawal creation returns 201 `COMPLETED`, and idempotency replay returns the same operation.
-- `implement-withdrawal-soles` is archived as `2026-10-30-implement-withdrawal-soles`, and `openspec/specs/withdrawal-soles/spec.md` exists.
-- `arch-001` remains `passing`.
+- `./scripts/verify-terraform.sh` passes: fmt, init, and validate.
+- A credentialed `terraform plan` renders 35 resources: VPC, subnets, NAT, EKS, node group, ECR, RDS, IAM, security groups, and outputs.
+- The local Docker Compose stack is healthy and `GET /health` returns 200.
+- No AWS resources were created; `terraform apply` was not run.
+- `provision-aws-eks-terraform` is archived as
+  `2026-10-30-provision-aws-eks-terraform`, and
+  `openspec/specs/aws-platform-infrastructure/spec.md` exists.
 
 ## Changed This Session
 
-- Added the full `withdrawal-soles` implementation, tests, migrations, Docker assets, and service documentation.
-- Fixed Traefik routing so the service reaches the local dependency stubs through the gateway.
-- Updated the architecture ERD and integration contract.
-- Updated `feature_list.json`, `progress.md`, and `session-handoff.md`.
+- Added `infra/terraform/` with the complete AWS target topology.
+- Added variable validation, sensitive database inputs, outputs, example tfvars, and the Terraform README.
+- Added `scripts/verify-terraform.sh` and a credential-free Terraform CI job.
+- Updated the root README and architecture deployment notes.
+- Rewrote `openspec/config.yaml` with the full project context and rules.
+- Archived `provision-aws-eks-terraform` and created the
+  `aws-platform-infrastructure` main spec.
 
 ## Broken Or Unverified
 
-- `infra-001` has no OpenSpec change and no Terraform code yet.
-- The compose dependency stubs are local-only and are not production services.
-- No AWS credentials were used; Terraform will be validated statically unless credentials are provided.
+- Application deployment, Traefik on EKS, and Kubernetes manifests are not implemented.
+- Terraform uses local state; an S3 backend with locking is still required for shared use.
+- RDS is single-AZ and the VPC has one NAT gateway; both are development defaults.
+- No `terraform apply` has been approved, so the cluster is not running in AWS.
 
 ## Next Best Step
 
-Propose the `infra-001` change for Terraform, mark `infra-001` as `in_progress`, implement the VPC, EKS cluster, managed node group, ECR repository, and RDS PostgreSQL 15 instance, then verify with `terraform fmt -check`, `terraform init -backend=false`, and `terraform validate`.
+Keep the application running locally. Deploy with `terraform apply` only after the account owner approves the EKS, EC2, NAT, and RDS cost. Then configure kubectl and add the application deployment manifests as a separate change.
 
 ## Commands
 
 ```bash
 ./init.sh
-openspec list
-openspec new change provision-aws-eks-terraform
-make verify
+./scripts/verify-terraform.sh
+openspec validate --all --strict
 docker compose up -d --build
+curl http://localhost:8080/health
 ```

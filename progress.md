@@ -9,8 +9,8 @@ chat history is not.
 - Repository root: the directory containing this file
 - Standard startup path: `./init.sh`
 - Standard verification path: `./scripts/verify.sh`
-- Current highest-priority unfinished feature: `infra-001` — AWS EKS cluster is provisioned with Terraform
-- Current blocker: none
+- Current highest-priority unfinished feature: none — all registered features are `passing`; application deployment and the other services are follow-ups
+- Current blocker: none; AWS deployment waits for explicit cost approval
 
 ## Session Log
 
@@ -87,3 +87,38 @@ chat history is not.
 - Files or artifacts updated: `src/`, `tests/`, `migrations/`, `tools/`, `docs/withdrawal-soles.md`, `Dockerfile`, `docker-compose.yml`, `.env.example`, `Makefile`, `pyproject.toml`, architecture docs, `feature_list.json`, `progress.md`, `session-handoff.md`
 - Known risk or unresolved issue: local compose stubs are not production services; the real user-service and transaction-service must honor the integration contract.
 - Next best step: propose and apply the Terraform change for `infra-001`.
+
+### Session 004
+
+- Date: 2026-10-30
+- Goal: Propose and implement the Terraform infrastructure for `infra-001` without deploying to AWS.
+- Completed:
+  - Created and validated the `provision-aws-eks-terraform` change.
+  - Added a Terraform root module for the VPC, public/private subnets, NAT gateway, EKS cluster, managed node group, IAM roles, security groups, ECR repository, and private RDS PostgreSQL 15.
+  - Added variables with validation, sensitive database credentials, deployment outputs, an example tfvars file, and operator documentation.
+  - Added `scripts/verify-terraform.sh` and a credential-free Terraform CI job.
+  - Updated the root README and architecture deployment notes.
+  - Archived `provision-aws-eks-terraform`; the main `aws-platform-infrastructure` spec now exists.
+  - Rewrote `openspec/config.yaml` with the full project context, technology stack, architecture and domain rules, verification commands, and artifact rules.
+- Verification run:
+  - `./scripts/verify-terraform.sh`
+  - `terraform fmt -check -recursive`
+  - `terraform init -backend=false`
+  - `terraform validate`
+  - `terraform plan` with `TF_VAR_db_password` set
+  - `terraform plan` without the password (expected failure)
+  - `terraform plan -var='node_desired_size=5'` (expected failure)
+  - `openspec validate provision-aws-eks-terraform --strict`
+  - `./init.sh`
+  - `docker compose ps` and `curl http://localhost:8080/health`
+- Evidence captured:
+  - Plan: 35 to add, 0 to change, 0 to destroy; includes VPC, subnets, EKS, node group, ECR, RDS, IAM, security groups, and outputs.
+  - Missing password and out-of-range node count both fail before creating resources.
+  - Terraform provider 6.71.0, validated by Terraform 1.14.5.
+  - Local stack remains healthy; `GET /health` returns 200.
+  - Final local smoke: `POST /api/v1/withdrawals` with `Idempotency-Key: local-final-1` returned 201 `COMPLETED` for S/ 10.00.
+  - No `terraform apply` was run and no AWS resources were created.
+- Commits: pending (Phase 3 implementation)
+- Files or artifacts updated: `infra/terraform/`, `scripts/verify-terraform.sh`, `.github/workflows/verify.yml`, `README.md`, `openspec/architecture/system-context.md`, `openspec/changes/provision-aws-eks-terraform/`, `feature_list.json`, `progress.md`, `session-handoff.md`
+- Known risk or unresolved issue: single NAT gateway and single-AZ RDS are development defaults; remote state and application deployment remain follow-ups.
+- Next best step: keep the application local; deploy to AWS only when the account owner approves the cost, then add the Kubernetes deployment manifests as a separate change.

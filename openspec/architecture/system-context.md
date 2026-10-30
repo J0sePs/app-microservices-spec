@@ -68,4 +68,7 @@ Traefik.
   PostgreSQL) reachable only from the cluster security group.
 - Container images stored in Amazon ECR.
 
-Terraform for this topology is delivered in a separate change.
+Terraform for this topology lives in [`infra/terraform/`](../../infra/terraform/README.md).
+It is verified with `terraform fmt -check`, `terraform init -backend=false`,
+`terraform validate`, and a credentialed `terraform plan`; applying it requires
+explicit cost approval.

@@ -1,0 +1,20 @@
+# Copy to terraform.tfvars (ignored by git) and adjust the values.
+aws_region     = "us-east-1"
+project_name   = "app-nube-2"
+environment    = "dev"
+vpc_cidr       = "10.20.0.0/16"
+kubernetes_version = "1.33"
+
+node_instance_types = ["t3.medium"]
+node_min_size       = 1
+node_desired_size   = 2
+node_max_size       = 3
+
+db_instance_class = "db.t4g.micro"
+db_allocated_storage = 20
+db_name     = "withdrawal_soles_db"
+db_username = "withdrawal"
+
+# Do not commit a real password. Prefer TF_VAR_db_password or an ignored
+# terraform.tfvars file.
+# db_password = "replace-with-a-strong-password"
