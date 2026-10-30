@@ -2,20 +2,22 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TF_DIR="$ROOT/infra/terraform"
 
 if ! command -v terraform >/dev/null 2>&1; then
-  echo "terraform is required to verify infra/terraform" >&2
+  echo "terraform is required to verify infra/terraform and infra/platform" >&2
   exit 1
 fi
 
-echo "==> terraform fmt -check"
-terraform -chdir="$TF_DIR" fmt -check -recursive
+for tf_dir in "$ROOT/infra/terraform" "$ROOT/infra/platform"; do
+  echo "==> $(basename "$(dirname "$tf_dir")")/$(basename "$tf_dir")"
+  echo "    terraform fmt -check"
+  terraform -chdir="$tf_dir" fmt -check -recursive
 
-echo "==> terraform init -backend=false"
-terraform -chdir="$TF_DIR" init -backend=false -input=false -no-color >/dev/null
+  echo "    terraform init -backend=false"
+  terraform -chdir="$tf_dir" init -backend=false -input=false -no-color >/dev/null
 
-echo "==> terraform validate"
-terraform -chdir="$TF_DIR" validate -no-color
+  echo "    terraform validate"
+  terraform -chdir="$tf_dir" validate -no-color
+done
 
 echo "Terraform checks passed"

@@ -112,6 +112,38 @@
         "docker compose ps and GET http://localhost:8080/health: local stack still healthy with 200 {\"status\":\"ok\"}"
       ],
       "notes": "Deployed to AWS and then fully destroyed on 2026-10-30. The Terraform state is empty and no billable stack resources remain; the local compose stack is still available for practice."
+    },
+    {
+      "id": "platform-001",
+      "priority": 4,
+      "area": "platform",
+      "title": "EKS gateway and application are managed by Terraform",
+      "user_visible_behavior": "A cloud engineer can apply a Terraform platform module after the cluster to install Traefik, deploy the withdrawal service and its dependency stub, run migrations, expose the API through the gateway, and read the public gateway URL from outputs.",
+      "change": "terraform-eks-platform",
+      "verification": [
+        "Run terraform fmt -check -recursive, terraform init -backend=false, and terraform validate in infra/platform.",
+        "Confirm the platform plan includes Traefik, the application namespace, database secret, migration Job, deployments, services, and Ingress.",
+        "Apply the infra and platform modules, then confirm the gateway hostname output and the application health endpoint.",
+        "Create a withdrawal through the gateway and confirm it completes.",
+        "Run ./init.sh and record the result."
+      ],
+      "evidence": [
+        "./scripts/verify-terraform.sh: fmt, init, and validate passed for infra/terraform and infra/platform",
+        "infra/platform uses pinned Traefik chart 42.2.0 and Kubernetes/Helm providers with EKS exec auth",
+        "terraform apply (infra): 41 resources, 2 nodes Ready",
+        "terraform apply (platform): Traefik 2/2, withdrawal-soles 2/2, mock-dependencies 1/1, migration Job Complete, Ingress created",
+        "gateway_hostname = ac76de6242f8b476ba99ff49e976360e-1857400072.us-east-1.elb.amazonaws.com (34.231.68.240)",
+        "GET /health, /docs, and / through the Traefik gateway: 200",
+        "POST /api/v1/withdrawals through the gateway with Idempotency-Key terraform-platform-1: 201 Created, status COMPLETED, transaction_id 2a5a82ad-71ca-45e5-a13c-8e4c08db4a3c",
+        "Fixed the initial double-base64 Secret encoding; the migration Job was recreated and completed",
+        "terraform plan -detailed-exitcode (platform): No changes, infrastructure matches the configuration",
+        "scripts/destroy-eks-demo.sh: platform destroyed first, then infra; 41 resources destroyed",
+        "post-destroy terraform states: empty for infra/platform; outputs: {} for both",
+        "post-destroy AWS checks: no EKS, RDS, EC2, available NAT, ELB/ALB, ECR, tagged VPC, EBS, RDS snapshot, or EKS log group remains",
+        "the remaining EIP 32.199.142.201 is tagged machupicchu-eip and is unrelated"
+      ],
+      "status": "passing",
+      "notes": "Second-stage Terraform root module; it reads the infra state and requires the cluster to exist. The platform was deployed, verified through the gateway, and fully destroyed; no billable resources remain."
     }
   ]
 }

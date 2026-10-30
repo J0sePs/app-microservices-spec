@@ -162,31 +162,17 @@ After an approved apply, deploy the service and its local dependency stub:
 ./scripts/deploy-eks-demo.sh
 ```
 
-The script builds and pushes the image, runs the Alembic migration Job, creates
-the database Secret, and deploys two `withdrawal-soles` replicas plus
-`mock-dependencies`. It does not create a LoadBalancer. Access the app with:
+The script builds and pushes the image, then applies the second-stage
+`infra/platform/` module. That module installs Traefik with a public
+`LoadBalancer`, creates the namespace and database Secret, runs the Alembic
+migration Job, deploys two `withdrawal-soles` replicas plus
+`mock-dependencies`, and creates the gateway Ingress. The gateway URL is
+printed from the platform outputs.
 
-```bash
-kubectl -n withdrawal-soles port-forward svc/withdrawal-soles 18080:80
-```
-
-Then open `http://localhost:18080/docs`. The script reads the database password
-from the ignored `infra/terraform/terraform.tfvars`; no secret is committed.
-
-### Public URL (optional, adds cost)
-
-To expose the demo publicly, switch the Service to `LoadBalancer`:
-
-```bash
-kubectl -n withdrawal-soles patch svc withdrawal-soles \
-  --type merge -p '{"spec":{"type":"LoadBalancer"}}'
-kubectl -n withdrawal-soles get svc withdrawal-soles -w
-```
-
-AWS creates a Classic LoadBalancer and returns a DNS name. It adds roughly
-$0.025/hour plus traffic. The demo has no gateway authentication and trusts the
-`X-User-Id` header, so this endpoint is for practice only. Remove the Service or
-run `terraform destroy` when finished.
+The platform module is documented in
+[`infra/platform/README.md`](../platform/README.md). The script reads the
+database password from the ignored `infra/terraform/terraform.tfvars`; no secret
+is committed.
 
 ## Destroy
 

@@ -202,3 +202,36 @@ chat history is not.
 - Files or artifacts updated: `scripts/destroy-eks-demo.sh`, `infra/terraform/README.md`, `README.md`, `feature_list.json`, `progress.md`, `session-handoff.md`
 - Known risk or unresolved issue: none; no AWS resources from this stack remain.
 - Next best step: redeploy only when needed with `terraform apply` and `./scripts/deploy-eks-demo.sh`, then destroy with `./scripts/destroy-eks-demo.sh`.
+
+### Session 008
+
+- Date: 2026-10-30
+- Goal: Move the gateway and application deployment from ad-hoc kubectl commands into Terraform.
+- Completed:
+  - Created `infra/platform/` with Kubernetes and Helm providers, remote state, pinned Traefik chart 42.2.0, namespace, Secret, migration Job, app and mock Deployments, Services, Ingress, and gateway outputs.
+  - Updated `scripts/deploy-eks-demo.sh` to build/push the image and apply the platform module.
+  - Updated `scripts/destroy-eks-demo.sh` to destroy the platform before the infra and to pass the database password.
+  - Updated `scripts/verify-terraform.sh` to validate both Terraform roots.
+  - Applied the infra and platform modules and verified the gateway.
+- Verification run:
+  - `terraform fmt -check -recursive`, `terraform init -backend=false`, and `terraform validate` in both roots
+  - `terraform apply` infra: 41 resources; both nodes Ready
+  - `terraform apply` platform: Traefik 2/2, application 2/2, mock 1/1, migration Job Complete
+  - `GET /health`, `/docs`, `/` through the gateway: 200
+  - `POST /api/v1/withdrawals` through the gateway: 201 `COMPLETED`
+  - `terraform plan -detailed-exitcode` platform: no changes
+- Evidence captured:
+  - `gateway_hostname = ac76de6242f8b476ba99ff49e976360e-1857400072.us-east-1.elb.amazonaws.com`
+  - `gateway_url = http://ac76de6242f8b476ba99ff49e976360e-1857400072.us-east-1.elb.amazonaws.com`
+  - Withdrawal `23ac218d-6e1b-41cb-b3a4-bbd60ee0b80c` completed; transaction `2a5a82ad-71ca-45e5-a13c-8e4c08db4a3c`.
+  - Initial migration failed because the Secret was double-base64 encoded; changing `data.url` to the raw URL and adding `replace_triggered_by` fixed it.
+- Commits: pending (platform Terraform)
+- Files or artifacts updated: `infra/platform/`, `scripts/deploy-eks-demo.sh`, `scripts/destroy-eks-demo.sh`, `scripts/verify-terraform.sh`, `README.md`, `infra/terraform/README.md`, `openspec/architecture/system-context.md`, `openspec/changes/terraform-eks-platform/`, `feature_list.json`, `progress.md`, `session-handoff.md`
+- Teardown:
+  - `scripts/destroy-eks-demo.sh` destroyed the platform first, then the infra.
+  - Terraform states are empty for both roots and outputs are `{}`.
+  - AWS checks found no EKS, RDS, EC2, available NAT, ELB/ALB, ECR, tagged VPC, EBS, RDS snapshot, or EKS log group.
+  - The remaining EIP `32.199.142.201` is `machupicchu-eip`, unrelated to this stack.
+- Known risk or unresolved issue: the public gateway had no authentication; it was practice-only and is now destroyed.
+- Archived `terraform-eks-platform` as `2026-10-30-terraform-eks-platform`; the main `eks-application-platform` spec now exists.
+- Next best step: keep the local compose stack for development; redeploy with the two-stage Terraform flow when needed.

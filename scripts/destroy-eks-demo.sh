@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TF_DIR="$ROOT/infra/terraform"
+PLATFORM_DIR="$ROOT/infra/platform"
 REGION="${AWS_REGION:-us-east-1}"
 NAMESPACE="withdrawal-soles"
 
@@ -13,8 +14,19 @@ for command in terraform aws kubectl; do
   fi
 done
 
+DB_PASSWORD="$(sed -n 's/^db_password *= *"\(.*\)"/\1/p' "$TF_DIR/terraform.tfvars" 2>/dev/null || true)"
+if [[ -z "$DB_PASSWORD" ]]; then
+  echo "db_password not found in $TF_DIR/terraform.tfvars" >&2
+  exit 1
+fi
+
+echo "==> Destroying the platform module"
+terraform -chdir="$PLATFORM_DIR" init -backend=false -input=false >/dev/null
+TF_VAR_db_password="$DB_PASSWORD" terraform -chdir="$PLATFORM_DIR" destroy \
+  -auto-approve -input=false -no-color
+
 if kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then
-  echo "==> Removing namespace and LoadBalancer"
+  echo "==> Removing the remaining namespace and LoadBalancer"
   kubectl delete namespace "$NAMESPACE" --wait=true --timeout=300s
 fi
 
@@ -32,7 +44,7 @@ if [ -n "$REPO" ]; then
   fi
 fi
 
-echo "==> Destroying Terraform resources"
+echo "==> Destroying the infra module"
 terraform -chdir="$TF_DIR" destroy -auto-approve -input=false -no-color
 
 if [ -n "$CLUSTER" ]; then
@@ -41,6 +53,7 @@ if [ -n "$CLUSTER" ]; then
     --log-group-name "/aws/eks/${CLUSTER}/cluster" 2>/dev/null || true
 fi
 
-echo "==> Terraform state"
+echo "==> Terraform states"
+terraform -chdir="$PLATFORM_DIR" state list
 terraform -chdir="$TF_DIR" state list
 echo "Destroy complete. Verify AWS for any remaining billable resources."

@@ -68,7 +68,9 @@ Traefik.
   PostgreSQL) reachable only from the cluster security group.
 - Container images stored in Amazon ECR.
 
-Terraform for this topology lives in [`infra/terraform/`](../../infra/terraform/README.md).
-It is verified with `terraform fmt -check`, `terraform init -backend=false`,
-`terraform validate`, and a credentialed `terraform plan`; applying it requires
-explicit cost approval.
+Terraform for the cluster lives in
+[`infra/terraform/`](../../infra/terraform/README.md). The Kubernetes platform,
+including Traefik, the application, the dependency stub, and the Ingress, lives
+in [`infra/platform/`](../../infra/platform/README.md). Both are verified with
+`terraform fmt -check`, `terraform init -backend=false`, `terraform validate`,
+and a credentialed plan; applying them requires explicit cost approval.

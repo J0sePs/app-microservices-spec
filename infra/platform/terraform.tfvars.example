@@ -1,0 +1,16 @@
+aws_region = "us-east-1"
+namespace  = "withdrawal-soles"
+
+# Use a tag that exists in the ECR repository.
+image_tag = "latest"
+
+traefik_chart_version = "42.2.0"
+traefik_replicas      = 2
+app_replicas          = 2
+mock_replicas         = 1
+
+db_username = "withdrawal"
+
+# Do not commit a real password. Prefer TF_VAR_db_password or an ignored
+# terraform.tfvars file.
+# db_password = "replace-with-a-strong-password"

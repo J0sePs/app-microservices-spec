@@ -49,8 +49,10 @@ docker compose up --build      # PostgreSQL + Traefik + service + local stubs
 
 The target AWS topology (VPC, EKS cluster, managed node group, ECR repository,
 and private RDS PostgreSQL 15) is defined in
-[`infra/terraform/`](infra/terraform/README.md). Static validation runs without
-AWS credentials:
+[`infra/terraform/`](infra/terraform/README.md). The Kubernetes platform
+(Traefik gateway, namespace, Secret, migrations, application, mock, and Ingress)
+is defined in [`infra/platform/`](infra/platform/README.md). Static validation
+runs without AWS credentials:
 
 ```bash
 ./scripts/verify-terraform.sh
@@ -58,9 +60,8 @@ AWS credentials:
 
 A credentialed `terraform plan` is expected before any approved apply. After an
 approved apply, `./scripts/deploy-eks-demo.sh` builds and pushes the image and
-deploys the demo application plus its local dependency stub. Tear it down with
-`./scripts/destroy-eks-demo.sh`. This repository does not create AWS resources
-automatically.
+applies the platform module. Tear it down with `./scripts/destroy-eks-demo.sh`.
+This repository does not create AWS resources automatically.
 
 ## Spec-driven workflow
 
