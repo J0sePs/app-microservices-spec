@@ -1,0 +1,40 @@
+schema: spec-driven
+
+context: |
+  This repository is a reusable template for spec-driven development with
+  OpenSpec and a five-subsystem coding-agent harness.
+
+  All OpenSpec artifacts must be written in English.
+  Every change must be scoped to one active feature in feature_list.json.
+  A change is not complete until scripts/verify.sh passes and evidence is
+  recorded in feature_list.json.
+  Do not edit openspec/specs/ directly; archive changes to update specs.
+  Keep the root AGENTS.md short; put detail in docs/ and read it on demand.
+
+rules:
+  proposal:
+    - "State the problem, the observable behavior change, and what is out of scope."
+    - "Name the harness subsystem(s) affected: instructions, state, verification, scope, lifecycle."
+    - "Keep the proposal under 500 words."
+  specs:
+    - "Write requirements as testable SHALL/MUST statements with WHEN/THEN scenarios."
+    - "Describe externally observable behavior, not implementation details."
+  design:
+    - "Record decisions and trade-offs; skip this file only when the change is trivial."
+  tasks:
+    - "Keep each task small enough to complete in one session."
+    - "Every task must state how completion is verified."
+    - "Group tests and documentation with the work they belong to."
+
+operations:
+  apply:
+    guidance:
+      - "Run ./init.sh before starting implementation."
+      - "Work on exactly one active feature and one active change."
+      - "Mark a task complete only after its verification has run."
+      - "Record evidence in feature_list.json before marking a feature passing."
+  archive:
+    guidance:
+      - "Run ./init.sh and confirm it passes before archiving."
+      - "Confirm feature_list.json and progress.md reflect the archived change."
+      - "Summarize the archive outcome in progress.md."
