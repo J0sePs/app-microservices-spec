@@ -16,6 +16,9 @@
   - Gateway `/health`, `/docs`, and `/` return 200.
   - A withdrawal through the gateway returned `201 COMPLETED` with transaction
     `614bd3f4-718d-4860-8b23-49b3e9b6e783`.
+  - Deployed endpoint verification passed `18/18`, including docs, OpenAPI,
+    idempotency replay/conflict, ownership routing to the mock, report, and the
+    expected `401`/`409`/`422` error envelopes.
 - The local Docker Compose stack remains healthy on port `8080`.
 
 ## Changed This Session

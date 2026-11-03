@@ -143,7 +143,8 @@
         "post-destroy AWS checks: no EKS, RDS, EC2, available NAT, ELB/ALB, ECR, tagged VPC, EBS, RDS snapshot, or EKS log group remains",
         "the remaining EIP 32.199.142.201 is tagged machupicchu-eip and is unrelated",
         "2026-11-03 re-apply: gateway aa56b06084cae4b828ba4a1f30f3ceb6-2084714021.us-east-1.elb.amazonaws.com, Traefik 2/2, app 2/2, mock 1/1, migration Complete",
-        "2026-11-03 public smoke test: /health 200, /docs 200, / 200, POST /api/v1/withdrawals 201 COMPLETED with transaction 614bd3f4-718d-4860-8b23-49b3e9b6e783"
+        "2026-11-03 public smoke test: /health 200, /docs 200, / 200, POST /api/v1/withdrawals 201 COMPLETED with transaction 614bd3f4-718d-4860-8b23-49b3e9b6e783",
+        "2026-11-03 deployed endpoint verification: 18/18 passed, covering health, docs, openapi.json, list/get/create/replay/report, ownership routing to mock, 401/409/422 error envelopes, and idempotency conflict"
       ],
       "status": "passing",
       "notes": "Second-stage Terraform root module. Re-applied on 2026-11-03; the platform is currently running. Destroy with ./scripts/destroy-eks-demo.sh when finished."

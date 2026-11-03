@@ -259,3 +259,30 @@ chat history is not.
 - Files or artifacts updated: `scripts/deploy-eks-demo.sh`, `service-reference.md`, `feature_list.json`, `progress.md`, `session-handoff.md`
 - Known risk or unresolved issue: the public gateway has no authentication and is practice-only; the stack is running and billing.
 - Next best step: use the gateway for practice, then run `./scripts/destroy-eks-demo.sh` to stop charges.
+
+### Session 010
+
+- Date: 2026-11-03
+- Goal: Verify the deployed public endpoints are correct and consumable.
+- Verification run:
+  - `GET /health` → 200
+  - `GET /docs` → 200
+  - `GET /openapi.json` → 200 with the five documented paths
+  - `GET /` → 200 with service links
+  - `GET /api/v1/withdrawals` → 200
+  - `GET /api/v1/withdrawals` without `X-User-Id` → 401 `UNAUTHORIZED`
+  - `GET /api/v1/accounts/{id}/ownership` → 200, routed to the mock through Traefik
+  - `POST /api/v1/withdrawals` → 201 `COMPLETED`
+  - Replay with the same `Idempotency-Key` → 200, same operation id
+  - Same key with a different amount → 409 `IDEMPOTENCY_CONFLICT`
+  - `GET /api/v1/withdrawals/{id}` → 200
+  - `GET /api/v1/withdrawals?status=COMPLETED` → 200
+  - `POST /api/v1/withdrawals/{id}/report` on completed → 200
+  - `POST /api/v1/withdrawals/{id}/cancel` on completed → 409 `INVALID_STATE`
+  - Missing `Idempotency-Key` → 422 `MISSING_IDEMPOTENCY_KEY`
+  - Amount `9.99` and `5000.01` → 422 `INVALID_AMOUNT`
+- Evidence captured:
+  - 18/18 checks passed against the public gateway.
+  - Created operation `50fb8667-47cd-49eb-a91e-706e2bc29bee`.
+- Known risk or unresolved issue: the public gateway has no authentication; practice-only.
+- Next best step: use the API or share the OpenAPI contract, then destroy the stack.
