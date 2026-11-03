@@ -10,7 +10,7 @@ chat history is not.
 - Standard startup path: `./init.sh`
 - Standard verification path: `./scripts/verify.sh`
 - Current highest-priority unfinished feature: none — all registered features are `passing`; the other five services are follow-ups
-- Current blocker: none; the AWS practice stack is running and must be destroyed to stop charges
+- Current blocker: none; the AWS practice stack was destroyed on 2026-11-03 and billing has stopped
 
 ## Session Log
 
@@ -304,3 +304,26 @@ chat history is not.
 - Files or artifacts updated: `ACUERDO-INTEGRACION-BILLETERA.md`, `README.md`, `service-reference.md`, `withdrawal-soles-integration.md`, `progress.md`
 - Known risk or unresolved issue: the agreement needs approval from the users, wallet, and deposits teams; no wallet test account exists yet.
 - Next best step: get the public users-service URL and a real active `idUsuario`, then implement the wallet client and schema migration.
+
+### Session 012
+
+- Date: 2026-11-03
+- Goal: Tear down the running AWS practice stack to stop charges.
+- Completed:
+  - Ran `./scripts/destroy-eks-demo.sh` against account `205346659030` in `us-east-1`.
+  - Destroyed the platform module (9 resources), then the namespace, ECR images, and the infra module (41 resources), then the EKS CloudWatch log group.
+- Verification run:
+  - `./scripts/destroy-eks-demo.sh` (exit 0)
+  - Post-destroy AWS inventory checks
+  - `terraform state list` for both roots
+  - `./init.sh`
+- Evidence captured:
+  - `terraform destroy` (platform): Destroy complete! Resources: 9 destroyed.
+  - `terraform destroy` (infra): Destroy complete! Resources: 41 destroyed.
+  - `terraform state list`: empty for `infra/terraform` and `infra/platform`.
+  - AWS: no EKS clusters, RDS instances, EC2 instances, NAT gateways, ELB/ALB, ECR repositories, tagged VPCs, EBS volumes, EKS log groups, or manual RDS snapshots.
+  - The only remaining EIP (`32.199.142.201`) is tagged `machupicchu-eip` and is unrelated to this stack.
+- Commits: pending (destroy evidence)
+- Files or artifacts updated: `progress.md`, `feature_list.json`, `session-handoff.md`
+- Known risk or unresolved issue: `withdrawal-001` and the wallet integration are still unverified against a live environment because the stack is down.
+- Next best step: re-apply with `terraform -chdir=infra/terraform apply` and `./scripts/deploy-eks-demo.sh` only when the gateway is needed again.

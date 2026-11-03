@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "project": "app-nube-2",
-  "last_updated": "2026-10-30",
+  "last_updated": "2026-11-03",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -110,9 +110,12 @@
         "AWS post-destroy checks: no EKS clusters, RDS instances, EC2 instances, NAT gateways, ELBs, ECR repositories, VPCs, EBS volumes, or EKS log groups remain",
         "The only remaining EIP (32.199.142.201) is tagged machupicchu-eip and is unrelated to this stack",
         "docker compose ps and GET http://localhost:8080/health: local stack still healthy with 200 {\"status\":\"ok\"}",
-        "2026-11-03 re-apply: 41 resources created; EKS 1.35, two nodes, RDS, and ECR active for the Terraform platform deployment"
+        "2026-11-03 re-apply: 41 resources created; EKS 1.35, two nodes, RDS, and ECR active for the Terraform platform deployment",
+        "2026-11-03 terraform destroy (infra): Destroy complete! Resources: 41 destroyed",
+        "2026-11-03 post-destroy: terraform state list empty; no EKS clusters, RDS instances, EC2 instances, NAT gateways, ECR repositories, tagged VPCs, EBS volumes, or manual RDS snapshots remain",
+        "2026-11-03 post-destroy EKS log group /aws/eks/app-nube-2-dev-eks/cluster deleted; the remaining EIP 32.199.142.201 is tagged machupicchu-eip and unrelated"
       ],
-      "notes": "Re-applied on 2026-11-03 for the Terraform platform deployment. The stack is currently running and must be destroyed to stop charges."
+      "notes": "Destroyed on 2026-11-03 with ./scripts/destroy-eks-demo.sh; the stack is down and no longer billing. Re-apply with terraform apply when needed."
     },
     {
       "id": "platform-001",
@@ -144,10 +147,12 @@
         "the remaining EIP 32.199.142.201 is tagged machupicchu-eip and is unrelated",
         "2026-11-03 re-apply: gateway aa56b06084cae4b828ba4a1f30f3ceb6-2084714021.us-east-1.elb.amazonaws.com, Traefik 2/2, app 2/2, mock 1/1, migration Complete",
         "2026-11-03 public smoke test: /health 200, /docs 200, / 200, POST /api/v1/withdrawals 201 COMPLETED with transaction 614bd3f4-718d-4860-8b23-49b3e9b6e783",
-        "2026-11-03 deployed endpoint verification: 18/18 passed, covering health, docs, openapi.json, list/get/create/replay/report, ownership routing to mock, 401/409/422 error envelopes, and idempotency conflict"
+        "2026-11-03 deployed endpoint verification: 18/18 passed, covering health, docs, openapi.json, list/get/create/replay/report, ownership routing to mock, 401/409/422 error envelopes, and idempotency conflict",
+        "2026-11-03 terraform destroy (platform): Destroy complete! Resources: 9 destroyed",
+        "2026-11-03 post-destroy: platform terraform state list empty and namespace withdrawal-soles plus its LoadBalancer removed"
       ],
       "status": "passing",
-      "notes": "Second-stage Terraform root module. Re-applied on 2026-11-03; the platform is currently running. Destroy with ./scripts/destroy-eks-demo.sh when finished."
+      "notes": "Second-stage Terraform root module. Destroyed on 2026-11-03 with ./scripts/destroy-eks-demo.sh; the stack is down."
     }
   ]
 }
