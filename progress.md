@@ -235,3 +235,27 @@ chat history is not.
 - Known risk or unresolved issue: the public gateway had no authentication; it was practice-only and is now destroyed.
 - Archived `terraform-eks-platform` as `2026-10-30-terraform-eks-platform`; the main `eks-application-platform` spec now exists.
 - Next best step: keep the local compose stack for development; redeploy with the two-stage Terraform flow when needed.
+
+### Session 009
+
+- Date: 2026-11-03
+- Goal: Execute the two-stage Terraform deployment again and leave the application available.
+- Completed:
+  - Applied `infra/terraform`: 41 resources, EKS 1.35, two `t3.small` nodes, RDS PostgreSQL 15, and ECR.
+  - Applied `infra/platform` through `scripts/deploy-eks-demo.sh`: Traefik, namespace, Secret, migration Job, application, mock, Services, and Ingress.
+  - Fixed the deploy script to update `kubeconfig` for the new cluster automatically.
+  - Updated `service-reference.md` with the current practice gateway URL.
+- Verification run:
+  - `terraform apply` infra: 41 resources
+  - `terraform apply` platform: 10 resources
+  - `kubectl -n traefik get pods,svc`: 2/2 Traefik pods and LoadBalancer active
+  - `kubectl -n withdrawal-soles get pods,svc,ingress`: 2/2 app, 1/1 mock, migration Complete
+  - `GET /health`, `/docs`, and `/` through the gateway: 200
+  - `POST /api/v1/withdrawals` through the gateway: 201 `COMPLETED`
+- Evidence captured:
+  - Gateway: `http://aa56b06084cae4b828ba4a1f30f3ceb6-2084714021.us-east-1.elb.amazonaws.com`
+  - Withdrawal `06172ecd-6cfa-4195-b1ec-d3c302473e6f`; transaction `614bd3f4-718d-4860-8b23-49b3e9b6e783`.
+- Commits: pending (redeploy evidence and script fix)
+- Files or artifacts updated: `scripts/deploy-eks-demo.sh`, `service-reference.md`, `feature_list.json`, `progress.md`, `session-handoff.md`
+- Known risk or unresolved issue: the public gateway has no authentication and is practice-only; the stack is running and billing.
+- Next best step: use the gateway for practice, then run `./scripts/destroy-eks-demo.sh` to stop charges.

@@ -38,9 +38,11 @@ TF_VAR_db_password="$DB_PASSWORD" terraform -chdir="$PLATFORM_DIR" apply \
   -auto-approve -input=false -no-color \
   -var="image_tag=$TAG"
 
+echo "==> Updating kubeconfig"
+aws eks update-kubeconfig --region "$REGION" --name "$CLUSTER" >/dev/null
+
 echo "==> Platform outputs"
 terraform -chdir="$PLATFORM_DIR" output
 
 echo "==> Cluster context"
-echo "aws eks update-kubeconfig --region $REGION --name $CLUSTER"
 echo "kubectl -n withdrawal-soles get pods,svc,ingress"

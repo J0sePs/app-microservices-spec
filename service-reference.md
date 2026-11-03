@@ -6,8 +6,9 @@ and the entity-relationship diagram.
 ## Current status
 
 - The local Docker Compose stack is running and healthy.
-- The AWS/EKS practice stack is currently destroyed. Any previous public
-  LoadBalancer URL is no longer valid.
+- The AWS/EKS practice stack is currently deployed through Terraform.
+- The gateway URL is ephemeral; read the current value from the platform
+  outputs after every apply.
 - The service owns `withdrawal_soles_db` and never reads another service's
   database.
 
@@ -46,6 +47,12 @@ The application paths are the same as local, for example:
 http://<gateway-hostname>/docs
 http://<gateway-hostname>/health
 http://<gateway-hostname>/api/v1/withdrawals
+```
+
+Current practice gateway:
+
+```text
+http://aa56b06084cae4b828ba4a1f30f3ceb6-2084714021.us-east-1.elb.amazonaws.com
 ```
 
 The ECR repository URL comes from the infra outputs:

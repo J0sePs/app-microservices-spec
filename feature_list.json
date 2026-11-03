@@ -109,9 +109,10 @@
         "terraform destroy: completed after deleting the ECR image; terraform state is empty and outputs are {}",
         "AWS post-destroy checks: no EKS clusters, RDS instances, EC2 instances, NAT gateways, ELBs, ECR repositories, VPCs, EBS volumes, or EKS log groups remain",
         "The only remaining EIP (32.199.142.201) is tagged machupicchu-eip and is unrelated to this stack",
-        "docker compose ps and GET http://localhost:8080/health: local stack still healthy with 200 {\"status\":\"ok\"}"
+        "docker compose ps and GET http://localhost:8080/health: local stack still healthy with 200 {\"status\":\"ok\"}",
+        "2026-11-03 re-apply: 41 resources created; EKS 1.35, two nodes, RDS, and ECR active for the Terraform platform deployment"
       ],
-      "notes": "Deployed to AWS and then fully destroyed on 2026-10-30. The Terraform state is empty and no billable stack resources remain; the local compose stack is still available for practice."
+      "notes": "Re-applied on 2026-11-03 for the Terraform platform deployment. The stack is currently running and must be destroyed to stop charges."
     },
     {
       "id": "platform-001",
@@ -140,10 +141,12 @@
         "scripts/destroy-eks-demo.sh: platform destroyed first, then infra; 41 resources destroyed",
         "post-destroy terraform states: empty for infra/platform; outputs: {} for both",
         "post-destroy AWS checks: no EKS, RDS, EC2, available NAT, ELB/ALB, ECR, tagged VPC, EBS, RDS snapshot, or EKS log group remains",
-        "the remaining EIP 32.199.142.201 is tagged machupicchu-eip and is unrelated"
+        "the remaining EIP 32.199.142.201 is tagged machupicchu-eip and is unrelated",
+        "2026-11-03 re-apply: gateway aa56b06084cae4b828ba4a1f30f3ceb6-2084714021.us-east-1.elb.amazonaws.com, Traefik 2/2, app 2/2, mock 1/1, migration Complete",
+        "2026-11-03 public smoke test: /health 200, /docs 200, / 200, POST /api/v1/withdrawals 201 COMPLETED with transaction 614bd3f4-718d-4860-8b23-49b3e9b6e783"
       ],
       "status": "passing",
-      "notes": "Second-stage Terraform root module; it reads the infra state and requires the cluster to exist. The platform was deployed, verified through the gateway, and fully destroyed; no billable resources remain."
+      "notes": "Second-stage Terraform root module. Re-applied on 2026-11-03; the platform is currently running. Destroy with ./scripts/destroy-eks-demo.sh when finished."
     }
   ]
 }
