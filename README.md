@@ -41,7 +41,9 @@ The only implemented service in this repository is `withdrawal-soles`. See
 migrations, and Docker Compose instructions. For current URLs, endpoints, and
 the ERD, see [service-reference.md](service-reference.md). For the
 cross-team integration contract, see
-[withdrawal-soles-integration.md](withdrawal-soles-integration.md).
+[withdrawal-soles-integration.md](withdrawal-soles-integration.md). The pending
+wallet integration agreement is in
+[ACUERDO-INTEGRACION-BILLETERA.md](ACUERDO-INTEGRACION-BILLETERA.md).
 
 ```bash
 make install && make verify   # Python service checks

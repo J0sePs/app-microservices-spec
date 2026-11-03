@@ -286,3 +286,21 @@ chat history is not.
   - Created operation `50fb8667-47cd-49eb-a91e-706e2bc29bee`.
 - Known risk or unresolved issue: the public gateway has no authentication; practice-only.
 - Next best step: use the API or share the OpenAPI contract, then destroy the stack.
+
+### Session 011
+
+- Date: 2026-11-03
+- Goal: Formalize the three-point agreement needed to connect `withdrawal-soles` with the PEN wallet.
+- Completed:
+  - Added `ACUERDO-INTEGRACION-BILLETERA.md` with decisions for debit ownership, identity mapping, and decimal-to-cents conversion.
+  - Documented the proposed withdrawal sequence, wallet error mapping, data columns, reversal policy, and acceptance criteria.
+  - Linked the agreement from the README, service reference, and integration contract.
+- Verification run:
+  - `./init.sh`
+- Evidence captured:
+  - The agreement explicitly requires `user-service` to expose integer `id_usuario` and the wallet's `/usuarios/{idUsuario}` contract.
+  - It records that the wallet's current 503 is an environment issue, not a code failure.
+- Commits: pending (integration agreement)
+- Files or artifacts updated: `ACUERDO-INTEGRACION-BILLETERA.md`, `README.md`, `service-reference.md`, `withdrawal-soles-integration.md`, `progress.md`
+- Known risk or unresolved issue: the agreement needs approval from the users, wallet, and deposits teams; no wallet test account exists yet.
+- Next best step: get the public users-service URL and a real active `idUsuario`, then implement the wallet client and schema migration.

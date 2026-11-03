@@ -357,6 +357,13 @@ El ERD completo está en
 [`service-reference.md`](service-reference.md#entity-relationship-diagram) y en
 [`openspec/architecture/erd/withdrawal-soles.md`](openspec/architecture/erd/withdrawal-soles.md).
 
+## Acuerdo con la billetera
+
+El acuerdo pendiente para conectar el retiro con la billetera PEN, incluyendo
+quién debita, cómo se obtiene `idUsuario` y cómo se convierten los montos a
+céntimos, está en
+[`ACUERDO-INTEGRACION-BILLETERA.md`](ACUERDO-INTEGRACION-BILLETERA.md).
+
 ## Práctica local
 
 ```bash
