@@ -39,7 +39,9 @@ one ERD per microservice.
 The only implemented service in this repository is `withdrawal-soles`. See
 [docs/withdrawal-soles.md](docs/withdrawal-soles.md) for setup, API examples,
 migrations, and Docker Compose instructions. For current URLs, endpoints, and
-the ERD, see [service-reference.md](service-reference.md).
+the ERD, see [service-reference.md](service-reference.md). For the
+cross-team integration contract, see
+[withdrawal-soles-integration.md](withdrawal-soles-integration.md).
 
 ```bash
 make install && make verify   # Python service checks
