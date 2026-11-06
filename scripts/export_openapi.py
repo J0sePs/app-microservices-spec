@@ -68,6 +68,13 @@ def enrich(spec: dict) -> dict:
     }
     spec["servers"] = [
         {
+            "url": (
+                "http://a6c1a4b5ffa8a44808f8a8a0784fe0d7-266125410"
+                ".us-east-1.elb.amazonaws.com"
+            ),
+            "description": "AWS EKS public gateway (Traefik LoadBalancer)",
+        },
+        {
             "url": "http://localhost:8080",
             "description": "Local Docker Compose through Traefik",
         },
