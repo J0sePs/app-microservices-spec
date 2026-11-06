@@ -441,7 +441,7 @@ chat history is not.
   - `terraform state list`: 0 entries in both roots.
   - AWS checks returned no EKS clusters, RDS instances, running EC2 instances, available NAT gateways, ELBv2 or Classic ELBs, ECR repositories, `app-nube-2-dev` VPCs, EBS volumes, or `/aws/eks/app-nube-2-dev-eks` log groups.
   - `./init.sh`: VERIFICATION PASSED, 5/5 harness subsystems and 16/16 checks.
-- Commits: pending (AWS teardown)
+- Commits: `7727c92 chore(infra): destroy the AWS practice stack`
 - Files or artifacts updated: `progress.md`, `session-handoff.md`, `feature_list.json`, `service-reference.md`
 - Known risk or unresolved issue: none; no billable AWS resources from this stack remain.
 - Next best step: keep the local compose stack for development; redeploy with `terraform -chdir=infra/terraform apply` and `./scripts/deploy-eks-demo.sh` only when the gateway is needed again.
