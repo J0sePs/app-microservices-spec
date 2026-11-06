@@ -3,42 +3,40 @@
 ## Verified Now
 
 - `withdrawal-001`, `infra-001`, and `platform-001` are `passing` with evidence.
-- `make verify` passes: ruff clean and 55 tests pass.
 - `./init.sh` passes with 5/5 harness subsystems and 16/16 checks.
-- `openapi.yaml` is generated from the FastAPI app; `make openapi` regenerates it.
-- `terraform-eks-platform` is archived as `2026-10-30-terraform-eks-platform`;
-  `openspec/specs/eks-application-platform/spec.md` exists.
-- The AWS practice stack was destroyed on 2026-11-03 and is no longer billing:
-  - `terraform destroy` removed 9 platform and 41 infra resources.
-  - Both Terraform states are empty; the ECR images and EKS log group are gone.
-  - AWS checks show no EKS, RDS, EC2, NAT gateway, ELB, ECR, tagged VPC, EBS,
-    manual RDS snapshot, or EKS log group remains.
-  - The only remaining EIP (`32.199.142.201`) is tagged `machupicchu-eip` and is
-    unrelated to this stack.
-- The local Docker Compose stack remains healthy on port `8080`.
+- The AWS practice stack is **running and billing** since 2026-11-06 in
+  `us-east-1`, account `205346659030`:
+  - infra: 41 resources (VPC, EKS `app-nube-2-dev-eks` v1.35, 2 × `t3.small`
+    nodes Ready, ECR, RDS PostgreSQL 15).
+  - platform: 10 resources (Traefik 42.2.0 2/2, app 2/2, mock 1/1, migration
+    Job Completed, Ingress).
+  - Gateway: `http://a6c1a4b5ffa8a44808f8a8a0784fe0d7-266125410.us-east-1.elb.amazonaws.com`
+  - Public smoke test: 11/11 passed, including create 201 `COMPLETED`,
+    idempotent replay 200, and 401/422 error paths.
+- The local Docker Compose stack is not running; `localhost:8080` is down.
 
 ## Changed This Session
 
-- Ran `./scripts/destroy-eks-demo.sh` and recorded the teardown evidence in
-  `feature_list.json` and `progress.md`.
+- Re-applied `infra/terraform` (41 resources) and ran
+  `./scripts/deploy-eks-demo.sh` (platform, 10 resources).
+- Recorded deploy and smoke-test evidence in `feature_list.json` and
+  `progress.md`.
 
 ## Broken Or Unverified
 
-- The stack is down, so the gateway URL from the previous session is dead and
-  `withdrawal-001` cannot be exercised against AWS until it is re-applied.
+- The stack is up and costs about $0.22/hour (~$5.20/day). It must be destroyed
+  when practice ends.
+- The public gateway has no authentication; practice-only.
 - Terraform uses local state; an S3 backend with locking is required for shared
   use.
 
 ## Next Best Step
 
-Nothing is running. To practise against the cloud again:
+Use the gateway for practice, then stop charges:
 
 ```bash
-terraform -chdir=infra/terraform apply
-./scripts/deploy-eks-demo.sh
+./scripts/destroy-eks-demo.sh
 ```
-
-Then destroy it again with `./scripts/destroy-eks-demo.sh` when finished.
 
 ## Commands
 

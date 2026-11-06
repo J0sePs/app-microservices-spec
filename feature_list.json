@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "project": "app-nube-2",
-  "last_updated": "2026-11-03",
+  "last_updated": "2026-11-06",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -113,9 +113,12 @@
         "2026-11-03 re-apply: 41 resources created; EKS 1.35, two nodes, RDS, and ECR active for the Terraform platform deployment",
         "2026-11-03 terraform destroy (infra): Destroy complete! Resources: 41 destroyed",
         "2026-11-03 post-destroy: terraform state list empty; no EKS clusters, RDS instances, EC2 instances, NAT gateways, ECR repositories, tagged VPCs, EBS volumes, or manual RDS snapshots remain",
-        "2026-11-03 post-destroy EKS log group /aws/eks/app-nube-2-dev-eks/cluster deleted; the remaining EIP 32.199.142.201 is tagged machupicchu-eip and unrelated"
+        "2026-11-03 post-destroy EKS log group /aws/eks/app-nube-2-dev-eks/cluster deleted; the remaining EIP 32.199.142.201 is tagged machupicchu-eip and unrelated",
+        "2026-11-06 re-apply: terraform init + plan from an empty state, then apply saved plan; Apply complete! Resources: 41 added, 0 changed, 0 destroyed",
+        "2026-11-06 apply outputs: VPC vpc-0522407d87fc65f35, EKS app-nube-2-dev-eks (v1.35.9-eks-6e7947a), 2 nodes Ready, RDS app-nube-2-dev-postgres.c2fc66is431b.us-east-1.rds.amazonaws.com:5432, ECR app-nube-2-dev/withdrawal-soles",
+        "2026-11-06 kubectl get nodes: both worker nodes Ready in us-east-1"
       ],
-      "notes": "Destroyed on 2026-11-03 with ./scripts/destroy-eks-demo.sh; the stack is down and no longer billing. Re-apply with terraform apply when needed."
+      "notes": "Re-applied on 2026-11-06 for the platform deployment; the stack is running and billing (~$0.22/hour). Destroy with ./scripts/destroy-eks-demo.sh when finished."
     },
     {
       "id": "platform-001",
@@ -149,10 +152,14 @@
         "2026-11-03 public smoke test: /health 200, /docs 200, / 200, POST /api/v1/withdrawals 201 COMPLETED with transaction 614bd3f4-718d-4860-8b23-49b3e9b6e783",
         "2026-11-03 deployed endpoint verification: 18/18 passed, covering health, docs, openapi.json, list/get/create/replay/report, ownership routing to mock, 401/409/422 error envelopes, and idempotency conflict",
         "2026-11-03 terraform destroy (platform): Destroy complete! Resources: 9 destroyed",
-        "2026-11-03 post-destroy: platform terraform state list empty and namespace withdrawal-soles plus its LoadBalancer removed"
+        "2026-11-03 post-destroy: platform terraform state list empty and namespace withdrawal-soles plus its LoadBalancer removed",
+        "2026-11-06 deploy: ./scripts/deploy-eks-demo.sh built and pushed image df278ed, then applied the platform module (10 resources): Traefik 42.2.0, 2/2 Traefik pods Running, app 2/2 Running, mock 1/1 Running, migration Job Completed, Ingress created",
+        "2026-11-06 gateway_url = http://a6c1a4b5ffa8a44808f8a8a0784fe0d7-266125410.us-east-1.elb.amazonaws.com",
+        "2026-11-06 public smoke test through the gateway: 11/11 passed — /health 200, /docs 200, / 200, list without X-User-Id 401, ownership 200 via mock, POST 201 COMPLETED (operation 77fb4cdd-e0cf-4d7b-ac5a-fbed78f580aa), idempotent replay 200, GET by id 200, amounts 9.99 and 5000.01 422, missing Idempotency-Key 422",
+        "2026-11-06 kubectl -n withdrawal-soles get pods,svc,ingress: withdrawal-soles 2/2 Running, mock-dependencies 1/1 Running, withdrawal-migrate Completed"
       ],
       "status": "passing",
-      "notes": "Second-stage Terraform root module. Destroyed on 2026-11-03 with ./scripts/destroy-eks-demo.sh; the stack is down."
+      "notes": "Second-stage Terraform root module. Deployed on 2026-11-06 and verified through the public gateway; the stack is running and billing. Destroy with ./scripts/destroy-eks-demo.sh when finished."
     }
   ]
 }

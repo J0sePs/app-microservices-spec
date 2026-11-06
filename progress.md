@@ -10,7 +10,7 @@ chat history is not.
 - Standard startup path: `./init.sh`
 - Standard verification path: `./scripts/verify.sh`
 - Current highest-priority unfinished feature: none — all registered features are `passing`; the other five services are follow-ups
-- Current blocker: none; the AWS practice stack was destroyed on 2026-11-03 and billing has stopped
+- Current blocker: none; the AWS practice stack was re-applied on 2026-11-06 and is running and billing (~$0.22/hour) until destroyed
 
 ## Session Log
 
@@ -327,3 +327,26 @@ chat history is not.
 - Files or artifacts updated: `progress.md`, `feature_list.json`, `session-handoff.md`
 - Known risk or unresolved issue: `withdrawal-001` and the wallet integration are still unverified against a live environment because the stack is down.
 - Next best step: re-apply with `terraform -chdir=infra/terraform apply` and `./scripts/deploy-eks-demo.sh` only when the gateway is needed again.
+
+### Session 013
+
+- Date: 2026-11-06
+- Goal: Re-apply the Terraform stack and deploy the application to AWS as requested.
+- Completed:
+  - Ran `terraform -chdir=infra/terraform init` and `plan` from an empty state: 41 to add.
+  - Applied the saved plan in `us-east-1` (account `205346659030`): 41 resources added.
+  - Ran `./scripts/deploy-eks-demo.sh`: image `df278ed` built and pushed to ECR, then the platform module applied (10 resources).
+- Verification run:
+  - `terraform apply` (infra): `Apply complete! Resources: 41 added, 0 changed, 0 destroyed.`
+  - `./scripts/deploy-eks-demo.sh` (platform): `Apply complete! Resources: 10 added, 0 changed, 0 destroyed.`
+  - `kubectl get nodes`: 2 nodes `Ready` (`v1.35.9-eks-6e7947a`).
+  - `kubectl -n withdrawal-soles get pods,svc,ingress`: app 2/2 Running, mock 1/1 Running, migration Completed, Ingress created.
+  - Public gateway smoke test: 11/11 passed (`/health`, `/docs`, `/`, 401 without `X-User-Id`, ownership via mock, create 201, idempotent replay 200, get 200, 422 for 9.99 and 5000.01, 422 without `Idempotency-Key`).
+- Evidence captured:
+  - Gateway: `http://a6c1a4b5ffa8a44808f8a8a0784fe0d7-266125410.us-east-1.elb.amazonaws.com`
+  - Withdrawal `77fb4cdd-e0cf-4d7b-ac5a-fbed78f580aa`; status `COMPLETED`.
+  - RDS: `app-nube-2-dev-postgres.c2fc66is431b.us-east-1.rds.amazonaws.com:5432`.
+  - ECR: `205346659030.dkr.ecr.us-east-1.amazonaws.com/app-nube-2-dev/withdrawal-soles:df278ed`.
+- Files or artifacts updated: `feature_list.json`, `progress.md`, `session-handoff.md`
+- Known risk or unresolved issue: the stack is running and billing; the public gateway has no authentication, so it is practice-only.
+- Next best step: use the gateway for practice, then run `./scripts/destroy-eks-demo.sh` to stop charges.
