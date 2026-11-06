@@ -11,17 +11,11 @@
   - HTTP checker against the compose stack: 11/11 checks with the balance
     restored.
   - `openspec validate --all --strict`: 8 passed, 0 failed.
+- The AWS practice stack is **destroyed**. The 2026-11-06 teardown removed the
+  platform, the infra module (41 resources), the ECR image, and the EKS log
+  group; both Terraform states are empty and no billable resources remain.
 - The local Docker Compose stack is running and healthy; `localhost:8080`
   serves the API through Traefik.
-- The AWS practice stack is **running and billing** since 2026-11-06 in
-  `us-east-1`, account `205346659030`:
-  - infra: 41 resources (VPC, EKS `app-nube-2-dev-eks` v1.35, 2 × `t3.small`
-    nodes Ready, ECR, RDS PostgreSQL 15).
-  - platform: 10 resources (Traefik 42.2.0 2/2, app 2/2, mock 1/1, migration
-    Job Completed, Ingress).
-  - Gateway: `http://a6c1a4b5ffa8a44808f8a8a0784fe0d7-266125410.us-east-1.elb.amazonaws.com`
-  - The deployed image predates the JWT and users changes; redeploy before
-    testing through the gateway.
 
 ## Changed This Session
 
@@ -40,11 +34,8 @@
 
 ## Broken Or Unverified
 
-- The AWS practice stack costs about $0.22/hour (~$5.20/day) and must be
-  destroyed when practice ends.
-- The deployed EKS image predates these changes. Run
-  `./scripts/deploy-eks-demo.sh` before testing JWT and the users contract
-  through the gateway.
+- The AWS environment is down, so the gateway-based checks are unverified until
+  the stack is re-applied and the image is redeployed.
 - The development JWT secret (`dev-only-change-me`, 18 bytes) is shared by all
   services. Production must inject a strong secret in every deployment.
 - The real users-service URL is not published. `WITHDRAWAL_SOLES_USERS_SERVICE_URL`
@@ -55,21 +46,22 @@
 
 ## Next Best Step
 
-1. Redeploy the new image before testing through the gateway:
-
-   ```bash
-   ./scripts/deploy-eks-demo.sh
-   ```
-
-2. Run the HTTP check against the gateway:
+1. Use the running local stack to test the JWT and users contract:
 
    ```bash
    .venv/bin/python scripts/wallet_contract_check.py \
-     --base-url http://<gateway> \
-     --wallet-url http://18.228.136.200
+     --base-url http://localhost:8080 \
+     --wallet-url http://localhost:8080
    ```
 
-3. Stop AWS charges when practice ends:
+2. Redeploy AWS only when the gateway is needed:
+
+   ```bash
+   terraform -chdir=infra/terraform apply
+   ./scripts/deploy-eks-demo.sh
+   ```
+
+3. Stop AWS charges after any practice run:
 
    ```bash
    ./scripts/destroy-eks-demo.sh

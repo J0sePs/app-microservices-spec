@@ -6,7 +6,8 @@ and the entity-relationship diagram.
 ## Current status
 
 - The local Docker Compose stack is running and healthy.
-- The AWS/EKS practice stack is currently deployed through Terraform.
+- The AWS/EKS practice stack is destroyed; both Terraform states are empty and
+  no billable resources remain.
 - The gateway URL is ephemeral; read the current value from the platform
   outputs after every apply.
 - The service owns `withdrawal_soles_db` and never reads another service's
@@ -49,7 +50,8 @@ http://<gateway-hostname>/health
 http://<gateway-hostname>/api/v1/withdrawals
 ```
 
-Current practice gateway:
+Current practice gateway (re-created only while the stack is applied; it is
+destroyed as of 2026-11-06):
 
 ```text
 http://a6c1a4b5ffa8a44808f8a8a0784fe0d7-266125410.us-east-1.elb.amazonaws.com

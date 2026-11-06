@@ -423,3 +423,25 @@ chat history is not.
 - Files or artifacts updated: `src/withdrawal_soles/api/security.py`, `src/withdrawal_soles/api/dependencies.py`, `src/withdrawal_soles/api/errors.py`, `src/withdrawal_soles/core/settings.py`, `src/withdrawal_soles/domain/`, `src/withdrawal_soles/application/use_cases.py`, `src/withdrawal_soles/infrastructure/`, `tests/`, `tools/mock_dependencies.py`, `scripts/simulate_wallet_integration.py`, `scripts/wallet_contract_check.py`, `scripts/export_openapi.py`, `Makefile`, `docker-compose.yml`, `.env.example`, `openapi.yaml`, docs, `openspec/`, `feature_list.json`, `progress.md`, `session-handoff.md`
 - Known risk or unresolved issue: the development secret is shared and only 18 bytes; production must inject a strong secret. The deployed EKS image predates this change, so the gateway must be redeployed before testing JWT and the users contract there.
 - Next best step: redeploy the image when the gateway is needed, or destroy the AWS practice stack to stop charges.
+
+### Session 016
+
+- Date: 2026-11-06
+- Goal: Destroy the AWS practice stack on request and stop all charges.
+- Completed:
+  - Ran `./scripts/destroy-eks-demo.sh` against account `205346659030` in `us-east-1`.
+  - It destroyed the platform module, removed any remaining namespace and LoadBalancer, deleted the ECR image, then destroyed the infra module and the EKS CloudWatch log group.
+- Verification run:
+  - `./scripts/destroy-eks-demo.sh` (exit 0)
+  - `terraform state list` for `infra/terraform` and `infra/platform`
+  - Post-destroy AWS inventory for EKS, RDS, EC2, NAT, ELB/ALB, ECR, tagged VPCs, EBS, and EKS log groups
+  - `./init.sh`
+- Evidence captured:
+  - `Destroy complete! Resources: 41 destroyed.`
+  - `terraform state list`: 0 entries in both roots.
+  - AWS checks returned no EKS clusters, RDS instances, running EC2 instances, available NAT gateways, ELBv2 or Classic ELBs, ECR repositories, `app-nube-2-dev` VPCs, EBS volumes, or `/aws/eks/app-nube-2-dev-eks` log groups.
+  - `./init.sh`: VERIFICATION PASSED, 5/5 harness subsystems and 16/16 checks.
+- Commits: pending (AWS teardown)
+- Files or artifacts updated: `progress.md`, `session-handoff.md`, `feature_list.json`, `service-reference.md`
+- Known risk or unresolved issue: none; no billable AWS resources from this stack remain.
+- Next best step: keep the local compose stack for development; redeploy with `terraform -chdir=infra/terraform apply` and `./scripts/deploy-eks-demo.sh` only when the gateway is needed again.

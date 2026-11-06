@@ -88,7 +88,7 @@ def enrich(spec: dict) -> dict:
                 "http://a6c1a4b5ffa8a44808f8a8a0784fe0d7-266125410"
                 ".us-east-1.elb.amazonaws.com"
             ),
-            "description": "AWS EKS public gateway (Traefik LoadBalancer)",
+            "description": "AWS EKS public gateway (practice; re-created on apply)",
         },
         {
             "url": "http://localhost:8080",
