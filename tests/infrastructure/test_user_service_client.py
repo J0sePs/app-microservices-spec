@@ -29,14 +29,19 @@ def settings() -> Settings:
     )
 
 
-def ownership_payload(owned: bool = True, currency: str = "PEN") -> dict[str, object]:
-    return {
+def ownership_payload(
+    owned: bool = True, currency: str = "PEN", id_usuario: int | None = 15
+) -> dict[str, object]:
+    payload: dict[str, object] = {
         "account_id": str(ACCOUNT_ID),
         "owner_user_id": str(USER_ID),
         "currency": currency,
         "status": "ACTIVE",
         "owned": owned,
     }
+    if id_usuario is not None:
+        payload["id_usuario"] = id_usuario
+    return payload
 
 
 async def test_ownership_success() -> None:
@@ -51,7 +56,22 @@ async def test_ownership_success() -> None:
     assert route.called
     assert result.owned is True
     assert result.currency == "PEN"
+    assert result.id_usuario == 15
     assert isinstance(result.account_id, UUID)
+
+
+async def test_ownership_without_id_usuario_is_none() -> None:
+    client = UserServiceClient(settings())
+    with respx.mock(base_url=BASE_URL) as mock:
+        mock.get(f"/api/v1/accounts/{ACCOUNT_ID}/ownership").mock(
+            return_value=httpx.Response(
+                200, json=ownership_payload(id_usuario=None)
+            )
+        )
+        result = await client.get_ownership(ACCOUNT_ID, USER_ID)
+    await client.aclose()
+
+    assert result.id_usuario is None
 
 
 @pytest.mark.parametrize(

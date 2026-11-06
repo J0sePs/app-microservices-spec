@@ -11,6 +11,8 @@ from withdrawal_soles.domain.models import (
     IdempotencyRecord,
     ReportingAttempt,
     StatusChange,
+    WalletBalance,
+    WalletMovement,
     Withdrawal,
     WithdrawalPage,
 )
@@ -69,6 +71,27 @@ class TransactionServicePort(Protocol):
     async def report(self, withdrawal: Withdrawal) -> str: ...
 
 
+class WalletServicePort(Protocol):
+    """Balance owner exposed by the PEN wallet."""
+
+    async def get_wallet(self, id_usuario: int) -> WalletBalance: ...
+
+    async def debit(
+        self,
+        wallet_id: UUID,
+        amount_cents: int,
+        external_reference: str,
+        idempotency_key: str,
+    ) -> WalletMovement: ...
+
+    async def reverse(
+        self,
+        movement_id: UUID,
+        reason: str,
+        idempotency_key: str,
+    ) -> WalletMovement: ...
+
+
 class Clock(Protocol):
     """Time source, injectable for deterministic tests."""
 
@@ -89,5 +112,6 @@ __all__ = [
     "ReportStatus",
     "TransactionServicePort",
     "UserServicePort",
+    "WalletServicePort",
     "WithdrawalRepository",
 ]

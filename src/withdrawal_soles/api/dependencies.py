@@ -13,6 +13,7 @@ from withdrawal_soles.application.use_cases import (
     GetWithdrawalUseCase,
     ListWithdrawalsUseCase,
     RetryReportUseCase,
+    ReverseWithdrawalUseCase,
 )
 from withdrawal_soles.domain.exceptions import Unauthorized
 from withdrawal_soles.domain.ports import Clock, IdGenerator
@@ -20,6 +21,7 @@ from withdrawal_soles.domain.ports import (
     TransactionServicePort as TransactionService,
 )
 from withdrawal_soles.domain.ports import UserServicePort as UserService
+from withdrawal_soles.domain.ports import WalletServicePort as WalletService
 from withdrawal_soles.infrastructure.db.repository import (
     SQLAlchemyWithdrawalRepository,
 )
@@ -77,6 +79,10 @@ def get_transaction_service(request: Request) -> TransactionService:
     return request.app.state.transaction_service
 
 
+def get_wallet_service(request: Request) -> WalletService:
+    return request.app.state.wallet_service
+
+
 def get_clock(request: Request) -> Clock:
     return request.app.state.clock
 
@@ -89,11 +95,17 @@ def get_create_use_case(
     repository: Annotated[SQLAlchemyWithdrawalRepository, Depends(get_repository)],
     user_service: Annotated[UserService, Depends(get_user_service)],
     transaction_service: Annotated[TransactionService, Depends(get_transaction_service)],
+    wallet_service: Annotated[WalletService, Depends(get_wallet_service)],
     clock: Annotated[Clock, Depends(get_clock)],
     ids: Annotated[IdGenerator, Depends(get_ids)],
 ) -> CreateWithdrawalUseCase:
     return CreateWithdrawalUseCase(
-        repository, user_service, transaction_service, clock, ids
+        repository,
+        user_service,
+        transaction_service,
+        wallet_service,
+        clock,
+        ids,
     )
 
 
@@ -124,6 +136,15 @@ def get_retry_report_use_case(
     ids: Annotated[IdGenerator, Depends(get_ids)],
 ) -> RetryReportUseCase:
     return RetryReportUseCase(repository, transaction_service, clock, ids)
+
+
+def get_reverse_use_case(
+    repository: Annotated[SQLAlchemyWithdrawalRepository, Depends(get_repository)],
+    wallet_service: Annotated[WalletService, Depends(get_wallet_service)],
+    clock: Annotated[Clock, Depends(get_clock)],
+    ids: Annotated[IdGenerator, Depends(get_ids)],
+) -> ReverseWithdrawalUseCase:
+    return ReverseWithdrawalUseCase(repository, wallet_service, clock, ids)
 
 
 UserId = Annotated[UUID, Depends(require_user_id)]

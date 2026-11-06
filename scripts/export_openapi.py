@@ -21,7 +21,8 @@ OPERATION_METADATA = {
         "createWithdrawal",
         "Create a PEN withdrawal",
         "Validate the account, enforce the per-operation and daily limits, "
-        "persist the operation, and report it to transaction-service.",
+        "debit the PEN wallet, persist the operation with its wallet ids, and "
+        "report it to transaction-service.",
     ),
     ("/api/v1/withdrawals", "get"): (
         "listWithdrawals",
@@ -44,6 +45,13 @@ OPERATION_METADATA = {
         "Retry reporting for an APPROVED operation. Returns 200 when the "
         "operation becomes COMPLETED and 202 when the ledger still fails.",
     ),
+    ("/api/v1/withdrawals/{withdrawal_id}/reverse", "post"): (
+        "reverseWithdrawal",
+        "Reverse a debited withdrawal",
+        "Reverse the full wallet debit for an APPROVED or COMPLETED operation "
+        "and mark it REVERSED. A second reversal returns 422; an operation "
+        "without a wallet debit returns 409.",
+    ),
     ("/health", "get"): (
         "health",
         "Check database readiness",
@@ -60,7 +68,11 @@ def enrich(spec: dict) -> dict:
         "mutating request also requires an `Idempotency-Key`. Amounts are "
         "decimal strings in PEN; the minimum is 10.00, the maximum per "
         "operation is 5000.00, and the daily accumulated limit per account is "
-        "10000.00."
+        "10000.00.\n\n"
+        "The external PEN wallet is the balance owner. A successful withdrawal "
+        "debits the wallet before it is persisted and stores the wallet and "
+        "movement identifiers; `POST /api/v1/withdrawals/{id}/reverse` returns "
+        "the full amount to the wallet."
     )
     spec["info"]["contact"] = {
         "name": "app-nube-2",
@@ -86,7 +98,9 @@ def enrich(spec: dict) -> dict:
     spec["tags"] = [
         {
             "name": "withdrawals",
-            "description": "Create, list, read, cancel, and report PEN withdrawals.",
+            "description": (
+                "Create, list, read, cancel, reverse, and report PEN withdrawals."
+            ),
         },
         {
             "name": "health",
@@ -135,9 +149,18 @@ def enrich(spec: dict) -> dict:
         "currency": "PEN",
         "status": "COMPLETED",
         "transaction_id": "aa3e255f-40b0-4054-80ee-0e637cb30060",
+        "wallet_id": "a212968a-21d1-40f1-a47d-5f87c5b36a84",
+        "wallet_movement_id": "5d0916cc-5cd9-4fdc-9671-79a79050e6e9",
+        "wallet_reversal_movement_id": None,
         "created_at": "2026-10-30T17:56:55.809071Z",
         "updated_at": "2026-10-30T17:56:55.824911Z",
     }
+
+    reverse = spec["components"]["schemas"].get("WithdrawalReverse")
+    if reverse is not None:
+        reverse["example"] = {
+            "reason": "Reversal requested by the operations team",
+        }
 
     return spec
 

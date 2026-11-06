@@ -1,6 +1,8 @@
 """Application use cases."""
 
+import logging
 from datetime import datetime
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 from withdrawal_soles.application.dto import (
@@ -17,10 +19,13 @@ from withdrawal_soles.domain.enums import (
 from withdrawal_soles.domain.exceptions import (
     AccountNotEligible,
     AccountNotOwned,
+    DependencyUnavailable,
     IdempotencyConflict,
     IdempotencyInProgress,
+    InsufficientBalance,
     InvalidState,
     ReportingError,
+    WalletAlreadyReversed,
     WithdrawalNotFound,
 )
 from withdrawal_soles.domain.models import (
@@ -35,14 +40,18 @@ from withdrawal_soles.domain.ports import (
     IdGenerator,
     TransactionServicePort,
     UserServicePort,
+    WalletServicePort,
     WithdrawalRepository,
 )
 from withdrawal_soles.domain.rules import (
     CURRENCY,
+    amount_to_cents,
     ensure_daily_limit,
     request_fingerprint,
     validate_amount,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class CreateWithdrawalUseCase:
@@ -53,12 +62,14 @@ class CreateWithdrawalUseCase:
         repository: WithdrawalRepository,
         user_service: UserServicePort,
         transaction_service: TransactionServicePort,
+        wallet_service: WalletServicePort,
         clock: Clock,
         ids: IdGenerator,
     ) -> None:
         self._repository = repository
         self._user_service = user_service
         self._transaction_service = transaction_service
+        self._wallet_service = wallet_service
         self._clock = clock
         self._ids = ids
 
@@ -91,6 +102,11 @@ class CreateWithdrawalUseCase:
             raise AccountNotEligible("The account currency must be PEN.")
         if ownership.status != "ACTIVE":
             raise AccountNotEligible("The account must be ACTIVE.")
+        if ownership.id_usuario is None:
+            raise DependencyUnavailable(
+                "user-service",
+                "user-service did not return the wallet id_usuario.",
+            )
 
         await self._repository.acquire_account_lock(command.account_id)
         start, end = self._clock.day_bounds()
@@ -128,20 +144,65 @@ class CreateWithdrawalUseCase:
             withdrawal.updated_at,
         )
 
-        await self._report(withdrawal, required=False)
-        await self._repository.save(withdrawal)
+        await self._debit_wallet(withdrawal, ownership.id_usuario, amount)
 
-        await self._repository.save_idempotency(
-            IdempotencyRecord(
-                id=self._ids.new_id(),
-                key=key,
-                request_hash=fingerprint,
-                withdrawal_id=withdrawal.id,
-                response_snapshot=serialize_withdrawal(withdrawal),
-                created_at=self._clock.now(),
+        try:
+            await self._report(withdrawal, required=False)
+            await self._repository.save(withdrawal)
+            await self._repository.save_idempotency(
+                IdempotencyRecord(
+                    id=self._ids.new_id(),
+                    key=key,
+                    request_hash=fingerprint,
+                    withdrawal_id=withdrawal.id,
+                    response_snapshot=serialize_withdrawal(withdrawal),
+                    created_at=self._clock.now(),
+                )
             )
-        )
+        except Exception:
+            await self._compensate(withdrawal)
+            raise
+
         return CreateWithdrawalResult(withdrawal=withdrawal, replayed=False)
+
+    async def _debit_wallet(
+        self,
+        withdrawal: Withdrawal,
+        id_usuario: int,
+        amount: Decimal,
+    ) -> None:
+        """Debit the exact amount before the operation is reported."""
+
+        wallet = await self._wallet_service.get_wallet(id_usuario)
+        amount_cents = amount_to_cents(amount)
+        if wallet.balance < amount_cents:
+            raise InsufficientBalance()
+        movement = await self._wallet_service.debit(
+            wallet_id=wallet.id,
+            amount_cents=amount_cents,
+            external_reference=str(withdrawal.id),
+            idempotency_key=str(withdrawal.id),
+        )
+        withdrawal.wallet_user_id = wallet.id_usuario
+        withdrawal.wallet_id = wallet.id
+        withdrawal.wallet_movement_id = movement.id
+        withdrawal.wallet_debited_at = self._clock.now()
+
+    async def _compensate(self, withdrawal: Withdrawal) -> None:
+        """Best-effort reversal when the local write fails after a debit."""
+
+        if withdrawal.wallet_movement_id is None:
+            return
+        try:
+            await self._wallet_service.reverse(
+                withdrawal.wallet_movement_id,
+                "local persistence failure",
+                f"{withdrawal.id}:reverse",
+            )
+        except Exception:
+            logger.exception(
+                "Wallet compensation failed for withdrawal %s", withdrawal.id
+            )
 
     async def _report(self, withdrawal: Withdrawal, *, required: bool) -> bool:
         try:
@@ -354,6 +415,62 @@ class RetryReportUseCase:
             )
         )
         return RetryReportResult(withdrawal=withdrawal, reported=True)
+
+
+class ReverseWithdrawalUseCase:
+    """Reverse the full wallet debit of an annulled withdrawal."""
+
+    def __init__(
+        self,
+        repository: WithdrawalRepository,
+        wallet_service: WalletServicePort,
+        clock: Clock,
+        ids: IdGenerator,
+    ) -> None:
+        self._repository = repository
+        self._wallet_service = wallet_service
+        self._clock = clock
+        self._ids = ids
+
+    async def execute(
+        self, withdrawal_id: UUID, user_id: UUID, reason: str
+    ) -> Withdrawal:
+        withdrawal = await self._repository.get(withdrawal_id)
+        if withdrawal is None or withdrawal.user_id != user_id:
+            raise WithdrawalNotFound()
+        if (
+            withdrawal.status == WithdrawalStatus.REVERSED
+            or withdrawal.wallet_reversal_movement_id is not None
+        ):
+            raise WalletAlreadyReversed()
+        if withdrawal.wallet_movement_id is None:
+            raise InvalidState(
+                withdrawal.status.value, WithdrawalStatus.REVERSED.value
+            )
+
+        movement = await self._wallet_service.reverse(
+            withdrawal.wallet_movement_id,
+            reason,
+            f"{withdrawal.id}:reverse",
+        )
+
+        previous = withdrawal.transition_to(
+            WithdrawalStatus.REVERSED, self._clock.now()
+        )
+        withdrawal.wallet_reversal_movement_id = movement.id
+        withdrawal.wallet_reversed_at = self._clock.now()
+        await self._repository.save(withdrawal)
+        await self._repository.add_status_change(
+            StatusChange(
+                id=self._ids.new_id(),
+                withdrawal_id=withdrawal.id,
+                from_status=previous,
+                to_status=withdrawal.status,
+                reason=reason,
+                created_at=withdrawal.updated_at,
+            )
+        )
+        return withdrawal
 
 
 def new_uuid() -> UUID:

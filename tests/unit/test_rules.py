@@ -8,6 +8,7 @@ import pytest
 from withdrawal_soles.domain.exceptions import DailyLimitExceeded, InvalidAmount
 from withdrawal_soles.domain.rules import (
     DAILY_LIMIT,
+    amount_to_cents,
     ensure_daily_limit,
     request_fingerprint,
     validate_amount,
@@ -50,6 +51,14 @@ def test_daily_limit_excess_is_rejected() -> None:
 
 def test_daily_limit_constant() -> None:
     assert DAILY_LIMIT == Decimal("10000.00")
+
+
+@pytest.mark.parametrize(
+    ("amount", "expected"),
+    [("10.00", 1000), ("250.00", 25000), ("250.50", 25050), ("5000.00", 500000)],
+)
+def test_amount_is_converted_to_exact_cents(amount: str, expected: int) -> None:
+    assert amount_to_cents(Decimal(amount)) == expected
 
 
 def test_fingerprint_is_stable_and_body_sensitive() -> None:

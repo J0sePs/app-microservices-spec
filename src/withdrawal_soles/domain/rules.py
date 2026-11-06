@@ -26,6 +26,12 @@ def validate_amount(amount: Decimal) -> Decimal:
     return normalized
 
 
+def amount_to_cents(amount: Decimal) -> int:
+    """Convert a PEN decimal amount to exact integer cents."""
+
+    return int(amount.quantize(MONEY_QUANTUM) * 100)
+
+
 def ensure_daily_limit(accumulated: Decimal, requested: Decimal) -> None:
     """Reject a request that would exceed the per-account daily limit."""
 

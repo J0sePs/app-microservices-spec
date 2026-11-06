@@ -15,6 +15,7 @@ async def request_with_retries(
     max_attempts: int,
     backoff_seconds: float,
     headers: Mapping[str, str] | None = None,
+    params: Mapping[str, Any] | None = None,
     json: dict[str, Any] | None = None,
 ) -> httpx.Response:
     """Retry transport failures and 5xx responses with exponential backoff."""
@@ -22,7 +23,9 @@ async def request_with_retries(
     last_exception: Exception | None = None
     for attempt in range(1, max_attempts + 1):
         try:
-            response = await client.request(method, url, headers=headers, json=json)
+            response = await client.request(
+                method, url, headers=headers, params=params, json=json
+            )
         except (httpx.TimeoutException, httpx.TransportError) as error:
             last_exception = error
             if attempt == max_attempts:

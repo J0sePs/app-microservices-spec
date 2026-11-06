@@ -35,6 +35,16 @@ def withdrawal_to_domain(row: WithdrawalOperation) -> Withdrawal:
         currency=row.currency,
         status=WithdrawalStatus(row.status),
         transaction_id=row.transaction_id,
+        wallet_user_id=row.wallet_user_id,
+        wallet_id=row.wallet_id,
+        wallet_movement_id=row.wallet_movement_id,
+        wallet_reversal_movement_id=row.wallet_reversal_movement_id,
+        wallet_debited_at=utc(row.wallet_debited_at)
+        if row.wallet_debited_at is not None
+        else None,
+        wallet_reversed_at=utc(row.wallet_reversed_at)
+        if row.wallet_reversed_at is not None
+        else None,
         created_at=utc(row.created_at),
         updated_at=utc(row.updated_at),
     )
@@ -49,6 +59,12 @@ def withdrawal_to_model(withdrawal: Withdrawal) -> WithdrawalOperation:
         currency=withdrawal.currency,
         status=withdrawal.status.value,
         transaction_id=withdrawal.transaction_id,
+        wallet_user_id=withdrawal.wallet_user_id,
+        wallet_id=withdrawal.wallet_id,
+        wallet_movement_id=withdrawal.wallet_movement_id,
+        wallet_reversal_movement_id=withdrawal.wallet_reversal_movement_id,
+        wallet_debited_at=withdrawal.wallet_debited_at,
+        wallet_reversed_at=withdrawal.wallet_reversed_at,
         created_at=withdrawal.created_at,
         updated_at=withdrawal.updated_at,
     )

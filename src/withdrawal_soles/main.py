@@ -14,6 +14,7 @@ from withdrawal_soles.infrastructure.clients.transaction_service import (
     TransactionServiceClient,
 )
 from withdrawal_soles.infrastructure.clients.user_service import UserServiceClient
+from withdrawal_soles.infrastructure.clients.wallet_service import WalletServiceClient
 from withdrawal_soles.infrastructure.clock import SystemClock, Uuid4Generator
 from withdrawal_soles.infrastructure.db.session import build_engine, build_sessionmaker
 
@@ -23,6 +24,7 @@ def create_app(
     *,
     user_service: Any | None = None,
     transaction_service: Any | None = None,
+    wallet_service: Any | None = None,
     clock: Any | None = None,
     ids: Any | None = None,
     engine: AsyncEngine | None = None,
@@ -37,13 +39,18 @@ def create_app(
     resolved_transaction_service = transaction_service or TransactionServiceClient(
         resolved_settings
     )
+    resolved_wallet_service = wallet_service or WalletServiceClient(resolved_settings)
     resolved_clock = clock or SystemClock(resolved_settings.business_timezone)
     resolved_ids = ids or Uuid4Generator()
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         yield
-        for adapter in (resolved_user_service, resolved_transaction_service):
+        for adapter in (
+            resolved_user_service,
+            resolved_transaction_service,
+            resolved_wallet_service,
+        ):
             close = getattr(adapter, "aclose", None)
             if close is not None:
                 await close()
@@ -60,6 +67,7 @@ def create_app(
     app.state.sessionmaker = resolved_sessionmaker
     app.state.user_service = resolved_user_service
     app.state.transaction_service = resolved_transaction_service
+    app.state.wallet_service = resolved_wallet_service
     app.state.clock = resolved_clock
     app.state.ids = resolved_ids
 

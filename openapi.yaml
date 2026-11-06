@@ -6,7 +6,12 @@ info:
 
     Every request carries the gateway-injected `X-User-Id` header. Every mutating request also requires
     an `Idempotency-Key`. Amounts are decimal strings in PEN; the minimum is 10.00, the maximum per operation
-    is 5000.00, and the daily accumulated limit per account is 10000.00.'
+    is 5000.00, and the daily accumulated limit per account is 10000.00.
+
+
+    The external PEN wallet is the balance owner. A successful withdrawal debits the wallet before it
+    is persisted and stores the wallet and movement identifiers; `POST /api/v1/withdrawals/{id}/reverse`
+    returns the full amount to the wallet.'
   version: 0.1.0
   contact:
     name: app-nube-2
@@ -89,8 +94,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WithdrawalResponse'
-      description: Validate the account, enforce the per-operation and daily limits, persist the operation,
-        and report it to transaction-service.
+      description: Validate the account, enforce the per-operation and daily limits, debit the PEN wallet,
+        persist the operation with its wallet ids, and report it to transaction-service.
     get:
       tags:
       - withdrawals
@@ -320,6 +325,86 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
           description: Service Unavailable
       description: Reject a PENDING operation. Repeating the request is idempotent.
+  /api/v1/withdrawals/{withdrawal_id}/reverse:
+    post:
+      tags:
+      - withdrawals
+      summary: Reverse a debited withdrawal
+      operationId: reverseWithdrawal
+      parameters:
+      - name: withdrawal_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Withdrawal Id
+      - name: X-User-Id
+        in: header
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Caller identity injected by the API gateway. Must be a UUID.
+      - name: Idempotency-Key
+        in: header
+        required: true
+        schema:
+          type: string
+          minLength: 1
+        description: Client-generated key that makes the mutation safe to retry. Reuse the same key for
+          the same request; reusing it with a different payload returns 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WithdrawalReverse'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WithdrawalResponse'
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unauthorized
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Forbidden
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Not Found
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Conflict
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Unprocessable Entity
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: Service Unavailable
+      description: Reverse the full wallet debit for an APPROVED or COMPLETED operation and mark it REVERSED.
+        A second reversal returns 422; an operation without a wallet debit returns 409.
   /api/v1/withdrawals/{withdrawal_id}/report:
     post:
       tags:
@@ -520,6 +605,24 @@ components:
           - type: string
           - type: 'null'
           title: Transaction Id
+        wallet_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Wallet Id
+        wallet_movement_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Wallet Movement Id
+        wallet_reversal_movement_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Wallet Reversal Movement Id
         created_at:
           type: string
           format: date-time
@@ -547,8 +650,26 @@ components:
         currency: PEN
         status: COMPLETED
         transaction_id: aa3e255f-40b0-4054-80ee-0e637cb30060
+        wallet_id: a212968a-21d1-40f1-a47d-5f87c5b36a84
+        wallet_movement_id: 5d0916cc-5cd9-4fdc-9671-79a79050e6e9
+        wallet_reversal_movement_id: null
         created_at: '2026-10-30T17:56:55.809071Z'
         updated_at: '2026-10-30T17:56:55.824911Z'
+    WithdrawalReverse:
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 1
+          title: Reason
+      additionalProperties: false
+      type: object
+      required:
+      - reason
+      title: WithdrawalReverse
+      description: Payload for reversing a debited withdrawal.
+      example:
+        reason: Reversal requested by the operations team
     WithdrawalStatus:
       type: string
       enum:
@@ -557,6 +678,7 @@ components:
       - REJECTED
       - COMPLETED
       - FAILED
+      - REVERSED
       title: WithdrawalStatus
       description: Lifecycle states allowed for a withdrawal.
 servers:
@@ -568,6 +690,6 @@ servers:
   description: EKS through kubectl port-forward
 tags:
 - name: withdrawals
-  description: Create, list, read, cancel, and report PEN withdrawals.
+  description: Create, list, read, cancel, reverse, and report PEN withdrawals.
 - name: health
   description: Database readiness for orchestration and the gateway.

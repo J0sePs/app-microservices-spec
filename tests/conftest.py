@@ -13,8 +13,18 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from withdrawal_soles.core.settings import Settings
-from withdrawal_soles.domain.exceptions import ReportingError
-from withdrawal_soles.domain.models import AccountOwnership, Withdrawal
+from withdrawal_soles.domain.exceptions import (
+    InsufficientBalance,
+    ReportingError,
+    WalletAlreadyReversed,
+    WalletNotFound,
+)
+from withdrawal_soles.domain.models import (
+    AccountOwnership,
+    WalletBalance,
+    WalletMovement,
+    Withdrawal,
+)
 from withdrawal_soles.infrastructure.db.base import Base
 from withdrawal_soles.main import create_app
 
@@ -59,6 +69,7 @@ class FakeUserService:
         currency: str = "PEN",
         status: str = "ACTIVE",
         owned: bool = True,
+        id_usuario: int | None = 15,
     ) -> None:
         self._accounts[(account_id, user_id)] = AccountOwnership(
             account_id=account_id,
@@ -66,6 +77,7 @@ class FakeUserService:
             currency=currency,
             status=status,
             owned=owned,
+            id_usuario=id_usuario,
         )
 
     async def get_ownership(
@@ -83,7 +95,146 @@ class FakeUserService:
             currency="PEN",
             status="ACTIVE",
             owned=True,
+            id_usuario=15,
         )
+
+
+class FakeWalletService:
+    """In-memory wallet with the same observable contract as the adapter."""
+
+    def __init__(self) -> None:
+        self.wallets: dict[int, WalletBalance] = {
+            15: WalletBalance(
+                id=UUID("a212968a-21d1-40f1-a47d-5f87c5b36a84"),
+                id_usuario=15,
+                currency="PEN",
+                balance=1_000_000,
+                created_at=NOW,
+            ),
+            16: WalletBalance(
+                id=UUID("dadf4b90-cb5f-48ac-8046-5acb3726a7a9"),
+                id_usuario=16,
+                currency="PEN",
+                balance=1500,
+                created_at=NOW,
+            ),
+            18: WalletBalance(
+                id=UUID("0b8b5c3f-b373-495f-80ef-555fc824ec8b"),
+                id_usuario=18,
+                currency="PEN",
+                balance=500000,
+                created_at=NOW,
+            ),
+        }
+        self.movements: dict[UUID, WalletMovement] = {}
+        self.reversed: set[UUID] = set()
+        self.get_error: Exception | None = None
+        self.debit_error: Exception | None = None
+        self.reverse_error: Exception | None = None
+        self.get_calls = 0
+        self.debit_calls = 0
+        self.reverse_calls = 0
+
+    def wallet_for(self, id_usuario: int) -> WalletBalance:
+        return self.wallets[id_usuario]
+
+    def set_balance(self, id_usuario: int, balance: int) -> None:
+        current = self.wallets[id_usuario]
+        self.wallets[id_usuario] = WalletBalance(
+            id=current.id,
+            id_usuario=current.id_usuario,
+            currency=current.currency,
+            balance=balance,
+            created_at=current.created_at,
+        )
+
+    async def get_wallet(self, id_usuario: int) -> WalletBalance:
+        self.get_calls += 1
+        if self.get_error is not None:
+            raise self.get_error
+        wallet = self.wallets.get(id_usuario)
+        if wallet is None:
+            raise WalletNotFound()
+        return wallet
+
+    async def debit(
+        self,
+        wallet_id: UUID,
+        amount_cents: int,
+        external_reference: str,
+        idempotency_key: str,
+    ) -> WalletMovement:
+        self.debit_calls += 1
+        if self.debit_error is not None:
+            raise self.debit_error
+        wallet = next(
+            (value for value in self.wallets.values() if value.id == wallet_id),
+            None,
+        )
+        if wallet is None:
+            raise WalletNotFound()
+        if wallet.balance < amount_cents:
+            raise InsufficientBalance()
+        movement = WalletMovement(
+            id=uuid4(),
+            wallet_id=wallet.id,
+            amount=amount_cents,
+            currency="PEN",
+            direction="DEBIT",
+            type="PAYMENT",
+            external_reference=external_reference,
+            created_at=NOW,
+        )
+        self.movements[movement.id] = movement
+        self.wallets[wallet.id_usuario] = WalletBalance(
+            id=wallet.id,
+            id_usuario=wallet.id_usuario,
+            currency=wallet.currency,
+            balance=wallet.balance - amount_cents,
+            created_at=wallet.created_at,
+        )
+        return movement
+
+    async def reverse(
+        self,
+        movement_id: UUID,
+        reason: str,
+        idempotency_key: str,
+    ) -> WalletMovement:
+        self.reverse_calls += 1
+        if self.reverse_error is not None:
+            raise self.reverse_error
+        original = self.movements.get(movement_id)
+        if original is None:
+            raise WalletNotFound()
+        if movement_id in self.reversed:
+            raise WalletAlreadyReversed()
+        wallet = next(
+            (value for value in self.wallets.values() if value.id == original.wallet_id),
+            None,
+        )
+        if wallet is None:
+            raise WalletNotFound()
+        self.reversed.add(movement_id)
+        reversal = WalletMovement(
+            id=uuid4(),
+            wallet_id=original.wallet_id,
+            amount=original.amount,
+            currency="PEN",
+            direction="CREDIT",
+            type="REVERSAL",
+            reversal_of=movement_id,
+            created_at=NOW,
+        )
+        self.movements[reversal.id] = reversal
+        self.wallets[wallet.id_usuario] = WalletBalance(
+            id=wallet.id,
+            id_usuario=wallet.id_usuario,
+            currency=wallet.currency,
+            balance=wallet.balance + original.amount,
+            created_at=wallet.created_at,
+        )
+        return reversal
 
 
 class FakeTransactionService:
@@ -116,6 +267,7 @@ async def app(tmp_path: Path) -> AsyncIterator[Any]:
         settings,
         user_service=FakeUserService(),
         transaction_service=FakeTransactionService(),
+        wallet_service=FakeWalletService(),
         clock=FixedClock(),
     )
     async with application.state.engine.begin() as connection:
@@ -145,6 +297,11 @@ def user_service(app: Any) -> FakeUserService:
 @pytest.fixture
 def transaction_service(app: Any) -> FakeTransactionService:
     return app.state.transaction_service
+
+
+@pytest.fixture
+def wallet_service(app: Any) -> FakeWalletService:
+    return app.state.wallet_service
 
 
 def headers(

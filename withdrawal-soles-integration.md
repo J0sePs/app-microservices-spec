@@ -4,16 +4,18 @@ Este documento es lo que necesita el cliente para crear retiros en soles y lo
 que necesitan los equipos de usuarios y transacciones para integrarse.
 
 El cliente llama a **retiros**. Retiros llama a **usuarios** para validar la
-cuenta y a **transacciones** para registrar el movimiento. Retiros **no llama a
-la billetera** y **no descuenta saldos**; solo registra y aprueba la operación de
-retiro.
+cuenta, a la **billetera PEN** para debitar el saldo, y a **transacciones** para
+registrar el movimiento. La billetera es la única dueña del saldo: retiros
+solicita el débito antes de aprobar la operación y guarda los identificadores
+del movimiento. También puede revertir el débito completo.
 
 ## Dirección
 
 | Dato | Valor |
 | --- | --- |
-| Base de práctica | `http://aa56b06084cae4b828ba4a1f30f3ceb6-2084714021.us-east-1.elb.amazonaws.com` |
+| Base de práctica | `http://a6c1a4b5ffa8a44808f8a8a0784fe0d7-266125410.us-east-1.elb.amazonaws.com` |
 | Base local | `http://localhost:8080` |
+| Billetera PEN | `http://18.228.136.200` |
 | Salud | `GET /health` |
 | Documentación | `/docs` |
 | OpenAPI | `/openapi.json` y [`openapi.yaml`](openapi.yaml) |
@@ -33,8 +35,8 @@ terraform -chdir=infra/platform output -raw gateway_url
 Ejemplos con la URL actual:
 
 ```text
-http://aa56b06084cae4b828ba4a1f30f3ceb6-2084714021.us-east-1.elb.amazonaws.com/health
-http://aa56b06084cae4b828ba4a1f30f3ceb6-2084714021.us-east-1.elb.amazonaws.com/docs
+http://a6c1a4b5ffa8a44808f8a8a0784fe0d7-266125410.us-east-1.elb.amazonaws.com/health
+http://a6c1a4b5ffa8a44808f8a8a0784fe0d7-266125410.us-east-1.elb.amazonaws.com/docs
 ```
 
 ## Formato de montos
@@ -91,16 +93,20 @@ ese header. No uses el endpoint público de práctica con datos reales.
    - debe existir;
    - debe pertenecer al usuario;
    - debe estar en `PEN`;
-   - debe estar `ACTIVE`.
+   - debe estar `ACTIVE`;
+   - debe incluir el entero `id_usuario` de la billetera.
 4. Retiros verifica el límite diario acumulado de la cuenta.
-5. Crea la operación, la aprueba y la reporta a `transaction-service`.
-6. Responde:
+5. Retiros consulta la billetera por `idUsuario` y debita el monto exacto en
+   céntimos con `externalReference` igual al UUID del retiro.
+6. Persiste la operación con `wallet_id`, `wallet_movement_id` y timestamps.
+7. Reporta la operación a `transaction-service` y responde:
    - `COMPLETED` si el reporte transaccional funcionó;
    - `APPROVED` si el retiro quedó aprobado pero el reporte falló. En ese caso
      se puede reintentar con `POST /{id}/report`.
 
-Retiros **no descuenta el saldo de una billetera**. Si el caso de negocio
-requiere descontar saldo, esa llamada pertenece a otro contrato/servicio.
+Si la billetera rechaza el débito, no se crea ningún retiro. Un fallo de
+reporte posterior no revierte el débito: la operación queda `APPROVED` y se
+puede reintentar el reporte.
 
 ## Endpoints
 
@@ -128,6 +134,9 @@ Respuesta `201` para una operación nueva:
   "currency": "PEN",
   "status": "COMPLETED",
   "transaction_id": "aa3e255f-40b0-4054-80ee-0e637cb30060",
+  "wallet_id": "a212968a-21d1-40f1-a47d-5f87c5b36a84",
+  "wallet_movement_id": "5d0916cc-5cd9-4fdc-9671-79a79050e6e9",
+  "wallet_reversal_movement_id": null,
   "created_at": "2026-10-30T17:56:55.809071Z",
   "updated_at": "2026-10-30T17:56:55.824911Z"
 }
@@ -148,7 +157,7 @@ la misma operación.
 Ejemplo con curl:
 
 ```bash
-curl -sS -X POST "http://aa56b06084cae4b828ba4a1f30f3ceb6-2084714021.us-east-1.elb.amazonaws.com/api/v1/withdrawals" \
+curl -sS -X POST "http://a6c1a4b5ffa8a44808f8a8a0784fe0d7-266125410.us-east-1.elb.amazonaws.com/api/v1/withdrawals" \
   -H "X-User-Id: 9d1e2f3a-4b5c-6d7e-8f90-1a2b3c4d5e6f" \
   -H "Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000" \
   -H "Content-Type: application/json" \
@@ -167,7 +176,7 @@ Parámetros opcionales:
 | Parámetro | Regla |
 | --- | --- |
 | `account_id` | UUID de la cuenta |
-| `status` | `PENDING`, `APPROVED`, `REJECTED`, `COMPLETED` o `FAILED` |
+| `status` | `PENDING`, `APPROVED`, `REJECTED`, `COMPLETED`, `REVERSED` o `FAILED` |
 | `limit` | Entero entre 1 y 100; por defecto 20 |
 | `offset` | Entero mayor o igual a 0; por defecto 0 |
 
@@ -221,7 +230,29 @@ En el flujo actual una creación válida pasa inmediatamente a `APPROVED` o
 `COMPLETED`, así que la cancelación exitosa aplica a operaciones pendientes
 creadas por un flujo futuro o manual.
 
-### 5. Reintentar el reporte
+### 5. Revertir un retiro
+
+```http
+POST /api/v1/withdrawals/{withdrawal_id}/reverse
+X-User-Id: <uuid>
+Idempotency-Key: <uuid>
+Content-Type: application/json
+
+{
+  "reason": "Reversión solicitada por operaciones"
+}
+```
+
+Revierte el débito completo en la billetera mediante un movimiento
+compensatorio y marca la operación como `REVERSED`. Solo aplica a operaciones
+`APPROVED` o `COMPLETED` que tengan `wallet_movement_id`.
+
+- `200`: la billetera acreditó el monto y la operación quedó `REVERSED`.
+- `409 INVALID_STATE`: la operación no tiene débito de billetera.
+- `422 WALLET_ALREADY_REVERSED`: la operación ya fue revertida.
+- `503 DEPENDENCY_UNAVAILABLE`: la billetera no respondió; se puede reintentar.
+
+### 6. Reintentar el reporte
 
 ```http
 POST /api/v1/withdrawals/{withdrawal_id}/report
@@ -235,7 +266,7 @@ Idempotency-Key: <uuid>
 
 Es útil cuando la creación respondió `APPROVED` con `transaction_id: null`.
 
-### 6. Salud
+### 7. Salud
 
 ```http
 GET /health
@@ -273,8 +304,14 @@ Todas las rutas devuelven el mismo envelope:
 | 422 | `INVALID_AMOUNT` | Monto fuera de rango o con más de dos decimales |
 | 422 | `DAILY_LIMIT_EXCEEDED` | Se supera el límite diario de la cuenta |
 | 422 | `ACCOUNT_NOT_ELIGIBLE` | Cuenta inactiva o moneda distinta de `PEN` |
+| 422 | `INSUFFICIENT_BALANCE` | La billetera no tiene saldo suficiente |
+| 422 | `USER_INACTIVE` | El usuario de la billetera está inactivo |
+| 422 | `WALLET_ALREADY_REVERSED` | El retiro ya fue revertido |
 | 422 | `VALIDATION_ERROR` | Cuerpo o parámetros no cumplen el contrato |
-| 503 | `DEPENDENCY_UNAVAILABLE` | `user-service` no respondió; el saldo/registro no cambió |
+| 404 | `WALLET_NOT_FOUND` | El usuario no tiene billetera |
+| 409 | `WALLET_CONFLICT` | Conflicto de idempotencia o estado en la billetera |
+| 503 | `DEPENDENCY_UNAVAILABLE` | `user-service`, la billetera o `transaction-service` no respondió |
+| 503 | `WALLET_AUTH_FAILED` | La billetera rechazó el token de servicio |
 | 500 | `INTERNAL_ERROR` | Error inesperado del servicio |
 
 Cuando `user-service` no responde, se puede reintentar con la misma
@@ -298,6 +335,7 @@ Respuesta `200`:
 {
   "account_id": "1c7a5e0e-4f4a-4a1f-9a3e-7b9f0d2a6c11",
   "owner_user_id": "9d1e2f3a-4b5c-6d7e-8f90-1a2b3c4d5e6f",
+  "id_usuario": 15,
   "currency": "PEN",
   "status": "ACTIVE",
   "owned": true
@@ -306,7 +344,9 @@ Respuesta `200`:
 
 Retiros usa `owned`, `currency` y `status` para decidir si puede continuar.
 `404` se traduce a `ACCOUNT_NOT_FOUND`; `403` a `ACCOUNT_NOT_OWNED`;
-`currency != PEN` o `status != ACTIVE` a `ACCOUNT_NOT_ELIGIBLE`.
+`currency != PEN` o `status != ACTIVE` a `ACCOUNT_NOT_ELIGIBLE`. Sin
+`id_usuario` no se llama a la billetera y se responde `503
+DEPENDENCY_UNAVAILABLE`.
 
 ### `transaction-service`
 
@@ -336,19 +376,56 @@ Respuesta esperada: `201` o `200` con `transaction_id`. Retiros guarda ese
 `transaction_id` en la operación y responde `COMPLETED`; si falla, deja la
 operación en `APPROVED` para reintentar.
 
+### `wallet` (billetera PEN)
+
+La billetera es la dueña del saldo y se llama directamente con un JWT HS256
+(issuer `billetera-dev`, subject `retiros`, TTL de 60 segundos). El contrato
+completo está en [`openapi-billetera.yaml`](openapi-billetera.yaml) y en
+[`openspec/architecture/integration-contract.md`](openspec/architecture/integration-contract.md).
+
+```http
+GET /v1/wallets?idUsuario=15
+Authorization: Bearer <jwt>
+```
+
+```http
+POST /v1/wallets/{wallet_id}/payments
+Authorization: Bearer <jwt>
+Idempotency-Key: <withdrawal_id>
+
+{
+  "amount": 25000,
+  "currency": "PEN",
+  "externalReference": "<withdrawal_id>",
+  "description": "PEN withdrawal"
+}
+```
+
+```http
+POST /v1/movements/{movement_id}/reverse
+Authorization: Bearer <jwt>
+Idempotency-Key: <withdrawal_id>:reverse
+```
+
+`amount` viaja en céntimos enteros: `S/ 250.00` se envía como `25000`. Retiros
+guarda el `wallet_id` y el id del movimiento de débito; la reversión guarda el
+id del movimiento compensatorio.
+
 ## Qué no hace esta API
 
-- No descuenta saldos de una billetera.
 - No administra usuarios ni cuentas; eso pertenece a `user-service`.
+- No implementa la billetera: solo consume su contrato de débito y reversión.
 - No registra banco, cajero, motivo, comisión ni comprobante.
 - No procesa retiros en USD; este servicio es solo `PEN`.
-- No valida JWT por sí mismo; confía en `X-User-Id` inyectado por el gateway.
+- No valida JWT de usuario por sí mismo; confía en `X-User-Id` inyectado por el
+  gateway.
 - No permite que otro servicio lea o escriba directamente su base de datos.
 
 ## Datos que guarda
 
-- `withdrawal_operations`: operación, cuenta, usuario, monto, moneda, estado,
-  `transaction_id` y timestamps.
+- `withdrawal_operations`: operación, cuenta, usuario, `wallet_user_id`,
+  `wallet_id`, `wallet_movement_id`, `wallet_reversal_movement_id`, monto,
+  moneda, estado, `transaction_id` y timestamps de débito/reversión.
 - `withdrawal_status_history`: auditoría de transiciones.
 - `idempotency_records`: clave, hash del request, operación y snapshot.
 - `reporting_attempts`: intentos de reporte, estado y error.
@@ -359,17 +436,22 @@ El ERD completo está en
 
 ## Acuerdo con la billetera
 
-El acuerdo pendiente para conectar el retiro con la billetera PEN, incluyendo
-quién debita, cómo se obtiene `idUsuario` y cómo se convierten los montos a
-céntimos, está en
+El acuerdo de integración con la billetera PEN está implementado en esta
+versión: retiros resuelve `id_usuario` desde `user-service`, debita la billetera
+en céntimos y permite revertir el débito completo. El detalle histórico está en
 [`ACUERDO-INTEGRACION-BILLETERA.md`](ACUERDO-INTEGRACION-BILLETERA.md).
 
 ## Práctica local
+
+El simulador local de dependencias expone las mismas rutas de billetera. Las
+billeteras sembradas son usuario 15 = `S/ 250.00`, usuario 16 = `S/ 15.00`, y
+usuario 18 = `S/ 5,000.00`; el usuario 17 no tiene billetera.
 
 ```bash
 docker compose up -d --build
 curl http://localhost:8080/health
 curl http://localhost:8080/docs
+.venv/bin/python scripts/simulate_wallet_integration.py --mode simulator
 ```
 
 La URL pública de práctica se puede recrear con:

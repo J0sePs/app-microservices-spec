@@ -26,6 +26,12 @@ class Withdrawal:
     created_at: datetime
     updated_at: datetime
     transaction_id: str | None = None
+    wallet_user_id: int | None = None
+    wallet_id: UUID | None = None
+    wallet_movement_id: UUID | None = None
+    wallet_reversal_movement_id: UUID | None = None
+    wallet_debited_at: datetime | None = None
+    wallet_reversed_at: datetime | None = None
 
     def transition_to(
         self,
@@ -88,6 +94,33 @@ class AccountOwnership:
     currency: str
     status: str
     owned: bool
+    id_usuario: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class WalletBalance:
+    """Wallet state returned by the wallet service."""
+
+    id: UUID
+    id_usuario: int
+    currency: str
+    balance: int
+    created_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class WalletMovement:
+    """One wallet movement created by a debit, credit, or reversal."""
+
+    id: UUID
+    wallet_id: UUID
+    amount: int
+    currency: str
+    direction: str
+    type: str
+    external_reference: str | None = None
+    reversal_of: UUID | None = None
+    created_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)

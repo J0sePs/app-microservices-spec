@@ -13,6 +13,8 @@ flowchart TB
     Traefik --> WithdrawalUSD[withdrawal-dollars]
     Traefik --> Transaction[transaction-service]
 
+    Wallet[PEN wallet<br/>external balance owner]
+
     User --> UserDB[(user_db)]
     DepositPEN --> DepositPENDB[(deposit_soles_db)]
     DepositUSD --> DepositUSDDB[(deposit_dollars_db)]
@@ -21,6 +23,7 @@ flowchart TB
     Transaction --> TransactionDB[(transaction_db)]
 
     WithdrawalPEN -.->|validate account + currency| User
+    WithdrawalPEN -.->|debit and reverse balance| Wallet
     WithdrawalPEN -.->|report approved operation| Transaction
     WithdrawalUSD -.->|validate account + currency| User
     WithdrawalUSD -.->|report approved operation| Transaction
@@ -32,7 +35,8 @@ flowchart TB
 
 Solid arrows are client traffic through the gateway or service-to-database
 access. Dotted arrows are service-to-service HTTP calls that also pass through
-Traefik.
+Traefik, except the wallet call, which uses the wallet's published base URL
+directly.
 
 ## Request path: PEN withdrawal
 
@@ -41,15 +45,23 @@ Traefik.
 2. Traefik validates the JWT, injects `X-User-Id`, and routes to
    `withdrawal-soles`.
 3. `withdrawal-soles` calls `GET /api/v1/accounts/{account_id}/ownership` on
-   `user-service` through Traefik to confirm ownership, currency `PEN`, and
-   account status.
-4. `withdrawal-soles` validates domain limits and persists the operation in
-   `withdrawal_soles_db`.
-5. When the operation reaches `APPROVED` or `COMPLETED`, the service calls
+   `user-service` through Traefik to confirm ownership, currency `PEN`,
+   account status, and the wallet's integer `id_usuario`.
+4. `withdrawal-soles` validates domain limits and calls the PEN wallet:
+   `GET /v1/wallets?idUsuario` and `POST /v1/wallets/{walletId}/payments` with
+   integer cents and the withdrawal UUID as idempotency key and external
+   reference.
+5. `withdrawal-soles` persists the operation with `wallet_id` and
+   `wallet_movement_id` in `withdrawal_soles_db`. A wallet failure aborts the
+   request before commit.
+6. When the operation reaches `APPROVED` or `COMPLETED`, the service calls
    `POST /api/v1/transactions` on `transaction-service` through Traefik. The
    ledger record is stored in `transaction_db`.
-6. If reporting fails, `withdrawal-soles` records a reporting attempt and
-   retries idempotently.
+7. If reporting fails, `withdrawal-soles` records a reporting attempt and
+   retries idempotently; the wallet debit is not reversed automatically.
+8. `POST /api/v1/withdrawals/{id}/reverse` calls
+   `POST /v1/movements/{movementId}/reverse`, stores the reversal movement, and
+   marks the operation `REVERSED`.
 
 ## Deployment topology
 

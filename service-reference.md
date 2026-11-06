@@ -52,7 +52,7 @@ http://<gateway-hostname>/api/v1/withdrawals
 Current practice gateway:
 
 ```text
-http://aa56b06084cae4b828ba4a1f30f3ceb6-2084714021.us-east-1.elb.amazonaws.com
+http://a6c1a4b5ffa8a44808f8a8a0784fe0d7-266125410.us-east-1.elb.amazonaws.com
 ```
 
 The ECR repository URL comes from the infra outputs:
@@ -74,6 +74,7 @@ mutating request also requires `Idempotency-Key`.
 | `GET` | `/api/v1/withdrawals` | `X-User-Id` | `200` paginated list |
 | `GET` | `/api/v1/withdrawals/{id}` | `X-User-Id` | `200` owned operation |
 | `POST` | `/api/v1/withdrawals/{id}/cancel` | `X-User-Id`, `Idempotency-Key` | `200` rejected operation |
+| `POST` | `/api/v1/withdrawals/{id}/reverse` | `X-User-Id`, `Idempotency-Key`, reason JSON | `200` reversed operation |
 | `POST` | `/api/v1/withdrawals/{id}/report` | `X-User-Id`, `Idempotency-Key` | `200` completed; `202` reporting still pending |
 | `GET` | `/health` | none | `200` ready; `503` database unavailable |
 
@@ -115,9 +116,15 @@ erDiagram
         uuid id PK
         uuid account_id "external ref: user_db.accounts.id"
         uuid user_id "external ref: user_db.users.id"
+        int wallet_user_id "external ref: wallet idUsuario"
+        uuid wallet_id "external ref: wallet wallets.id"
+        uuid wallet_movement_id "external ref: wallet movements.id"
+        uuid wallet_reversal_movement_id "external ref: wallet movements.id"
         numeric amount "10.00 to 5000.00"
         string currency "PEN"
-        string status "PENDING, APPROVED, REJECTED, COMPLETED, or FAILED"
+        string status "PENDING, APPROVED, REJECTED, COMPLETED, REVERSED, or FAILED"
+        timestamp wallet_debited_at
+        timestamp wallet_reversed_at
         timestamp created_at
         timestamp updated_at
     }
@@ -156,7 +163,10 @@ erDiagram
 - `withdrawal_operations.amount` is between `10.00` and `5000.00` PEN.
 - `withdrawal_operations.currency` is restricted to `PEN`.
 - `withdrawal_operations.status` is one of `PENDING`, `APPROVED`, `REJECTED`,
-  `COMPLETED`, or `FAILED`.
+  `COMPLETED`, `REVERSED`, or `FAILED`.
+- `withdrawal_operations.wallet_user_id`, `wallet_id`, `wallet_movement_id`, and
+  `wallet_reversal_movement_id` are external references to the PEN wallet; they
+  are stored as values, not database foreign keys.
 - `withdrawal_status_history.withdrawal_id` and
   `reporting_attempts.withdrawal_id` reference
   `withdrawal_operations.id` inside the same database.
@@ -179,9 +189,12 @@ stateDiagram-v2
     PENDING --> REJECTED
     APPROVED --> COMPLETED
     APPROVED --> FAILED
+    APPROVED --> REVERSED
+    COMPLETED --> REVERSED
     REJECTED --> [*]
     COMPLETED --> [*]
     FAILED --> [*]
+    REVERSED --> [*]
 ```
 
 The daily limit of `S/ 10,000.00` is enforced per account over the current

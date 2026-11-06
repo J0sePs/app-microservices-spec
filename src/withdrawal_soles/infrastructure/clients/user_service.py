@@ -60,12 +60,14 @@ class UserServiceClient:
 
         try:
             payload = response.json()
+            id_usuario = payload.get("id_usuario", payload.get("idUsuario"))
             return AccountOwnership(
                 account_id=UUID(payload["account_id"]),
                 owner_user_id=UUID(payload["owner_user_id"]),
                 currency=str(payload["currency"]),
                 status=str(payload["status"]),
                 owned=bool(payload["owned"]),
+                id_usuario=int(id_usuario) if id_usuario is not None else None,
             )
         except (KeyError, TypeError, ValueError) as error:
             raise DependencyUnavailable(

@@ -27,11 +27,14 @@ class WithdrawalOperation(Base):
         CheckConstraint("amount >= 10.00 AND amount <= 5000.00", name="ck_amount_range"),
         CheckConstraint("currency = 'PEN'", name="ck_currency_pen"),
         CheckConstraint(
-            "status IN ('PENDING', 'APPROVED', 'REJECTED', 'COMPLETED', 'FAILED')",
+            "status IN ("
+            "'PENDING', 'APPROVED', 'REJECTED', 'COMPLETED', 'FAILED', 'REVERSED'"
+            ")",
             name="ck_status",
         ),
         Index("ix_withdrawal_operations_account_created", "account_id", "created_at"),
         Index("ix_withdrawal_operations_user_created", "user_id", "created_at"),
+        Index("ix_withdrawal_operations_wallet", "wallet_id"),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True)
@@ -41,6 +44,20 @@ class WithdrawalOperation(Base):
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="PEN")
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     transaction_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    wallet_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    wallet_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    wallet_movement_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), nullable=True
+    )
+    wallet_reversal_movement_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), nullable=True
+    )
+    wallet_debited_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    wallet_reversed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

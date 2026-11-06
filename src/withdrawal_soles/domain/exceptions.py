@@ -116,3 +116,54 @@ class DependencyUnavailable(DomainError):
 class ReportingError(DomainError):
     def __init__(self, message: str, details: dict[str, Any] | None = None) -> None:
         super().__init__("REPORTING_FAILED", message, 502, details)
+
+
+class WalletNotFound(DomainError):
+    def __init__(self) -> None:
+        super().__init__("WALLET_NOT_FOUND", "The wallet was not found.", 404)
+
+
+class InsufficientBalance(DomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            "INSUFFICIENT_BALANCE",
+            "The wallet balance is lower than the withdrawal amount.",
+            422,
+        )
+
+
+class WalletUserInactive(DomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            "USER_INACTIVE",
+            "The wallet owner is not active.",
+            422,
+        )
+
+
+class WalletConflict(DomainError):
+    def __init__(self, message: str = "The wallet rejected a duplicate reference.") -> None:
+        super().__init__("WALLET_CONFLICT", message, 409)
+
+
+class WalletAuthFailed(DomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            "WALLET_AUTH_FAILED",
+            "The wallet rejected the service credentials.",
+            503,
+        )
+
+
+class WalletAlreadyReversed(DomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            "WALLET_ALREADY_REVERSED",
+            "The wallet movement was already reversed.",
+            422,
+        )
+
+
+class WalletRejected(DomainError):
+    def __init__(self, message: str) -> None:
+        super().__init__("WALLET_REJECTED", message, 422)

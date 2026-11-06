@@ -99,6 +99,28 @@ async def test_daily_total_counts_only_selected_statuses(session) -> None:
     assert total == Decimal("300.00")
 
 
+async def test_wallet_fields_round_trip(session) -> None:
+    repository = SQLAlchemyWithdrawalRepository(session)
+    value = make_withdrawal()
+    wallet_id = uuid4()
+    movement_id = uuid4()
+    value.wallet_user_id = 15
+    value.wallet_id = wallet_id
+    value.wallet_movement_id = movement_id
+    value.wallet_debited_at = datetime(2026, 11, 6, 20, 0, tzinfo=UTC)
+    await repository.add(value)
+    await session.commit()
+
+    fetched = await repository.get(value.id)
+    assert fetched is not None
+    assert fetched.wallet_user_id == 15
+    assert fetched.wallet_id == wallet_id
+    assert fetched.wallet_movement_id == movement_id
+    assert fetched.wallet_debited_at == datetime(
+        2026, 11, 6, 20, 0, tzinfo=UTC
+    )
+
+
 async def test_idempotency_and_reporting_attempts(session) -> None:
     repository = SQLAlchemyWithdrawalRepository(session)
     value = make_withdrawal()

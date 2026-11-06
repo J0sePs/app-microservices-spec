@@ -13,12 +13,14 @@ from withdrawal_soles.api.dependencies import (
     get_get_use_case,
     get_list_use_case,
     get_retry_report_use_case,
+    get_reverse_use_case,
 )
 from withdrawal_soles.api.schemas import (
     ErrorResponse,
     WithdrawalCreate,
     WithdrawalListResponse,
     WithdrawalResponse,
+    WithdrawalReverse,
 )
 from withdrawal_soles.application.dto import CreateWithdrawalCommand
 from withdrawal_soles.application.use_cases import (
@@ -27,6 +29,7 @@ from withdrawal_soles.application.use_cases import (
     GetWithdrawalUseCase,
     ListWithdrawalsUseCase,
     RetryReportUseCase,
+    ReverseWithdrawalUseCase,
 )
 from withdrawal_soles.domain.enums import WithdrawalStatus
 
@@ -127,6 +130,23 @@ async def cancel_withdrawal(
 ) -> WithdrawalResponse:
     del idempotency_key
     withdrawal = await use_case.execute(withdrawal_id, user_id)
+    return WithdrawalResponse.from_domain(withdrawal)
+
+
+@router.post(
+    "/api/v1/withdrawals/{withdrawal_id}/reverse",
+    response_model=WithdrawalResponse,
+    responses=ERROR_RESPONSES,
+)
+async def reverse_withdrawal(
+    withdrawal_id: UUID,
+    payload: WithdrawalReverse,
+    user_id: UserId,
+    idempotency_key: IdempotencyKey,
+    use_case: Annotated[ReverseWithdrawalUseCase, Depends(get_reverse_use_case)],
+) -> WithdrawalResponse:
+    del idempotency_key
+    withdrawal = await use_case.execute(withdrawal_id, user_id, payload.reason)
     return WithdrawalResponse.from_domain(withdrawal)
 
 

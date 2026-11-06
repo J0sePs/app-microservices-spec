@@ -8,6 +8,9 @@ layout and owns `withdrawal_soles_db`.
 - Create PEN withdrawals with `S/ 10.00` minimum, `S/ 5,000.00` maximum, and a
   `S/ 10,000.00` daily accumulated limit per account.
 - Validate account ownership, currency, and status through `user-service`.
+- Debit the external PEN wallet, which is the sole owner of the balance, and
+  persist the wallet and movement identifiers.
+- Reverse the full wallet debit through a compensating movement.
 - Enforce `Idempotency-Key` on mutations.
 - Persist an auditable lifecycle, idempotency records, and reporting attempts.
 - Report approved operations to `transaction-service`.
@@ -48,8 +51,14 @@ Settings use the `WITHDRAWAL_SOLES_` prefix. See `.env.example`.
 | `WITHDRAWAL_SOLES_DATABASE_URL` | `postgresql+asyncpg://withdrawal:withdrawal@localhost:5432/withdrawal_soles_db` | Owned database |
 | `WITHDRAWAL_SOLES_USER_SERVICE_URL` | `http://localhost:8080` | Gateway base URL for user-service |
 | `WITHDRAWAL_SOLES_TRANSACTION_SERVICE_URL` | `http://localhost:8080` | Gateway base URL for transaction-service |
+| `WITHDRAWAL_SOLES_WALLET_SERVICE_URL` | `http://18.228.136.200` | Published PEN wallet base URL |
 | `WITHDRAWAL_SOLES_BUSINESS_TIMEZONE` | `America/Lima` | Daily limit window |
 | `WITHDRAWAL_SOLES_HTTP_MAX_ATTEMPTS` | `3` | Outbound retry bound |
+| `WITHDRAWAL_SOLES_HTTP_BACKOFF_SECONDS` | `0.2` | Outbound retry backoff |
+| `WITHDRAWAL_SOLES_WALLET_JWT_SECRET` | `dev-only-change-me` | HS256 wallet token secret (dev only) |
+| `WITHDRAWAL_SOLES_WALLET_JWT_ISSUER` | `billetera-dev` | Wallet token issuer |
+| `WITHDRAWAL_SOLES_WALLET_JWT_SUBJECT` | `retiros` | Wallet token subject |
+| `WITHDRAWAL_SOLES_WALLET_JWT_TTL_SECONDS` | `60` | Wallet token lifetime |
 
 ## Database migrations
 
@@ -60,6 +69,8 @@ Settings use the `WITHDRAWAL_SOLES_` prefix. See `.env.example`.
 
 The initial migration creates `withdrawal_operations`,
 `withdrawal_status_history`, `idempotency_records`, and `reporting_attempts`.
+Migration `0002_add_wallet_integration` adds the wallet columns and the
+`REVERSED` status.
 
 ## Docker Compose
 
@@ -104,6 +115,14 @@ curl -X POST http://localhost:8080/api/v1/withdrawals/<id>/report \
   -H "Idempotency-Key: report-1"
 ```
 
+```bash
+curl -X POST http://localhost:8080/api/v1/withdrawals/<id>/reverse \
+  -H "Content-Type: application/json" \
+  -H "X-User-Id: 9d1e2f3a-4b5c-6d7e-8f90-1a2b3c4d5e6f" \
+  -H "Idempotency-Key: reverse-1" \
+  -d '{"reason":"Reversal requested by the operations team"}'
+```
+
 ### OpenAPI contract
 
 The generated contract is checked in at [`openapi.yaml`](../openapi.yaml). It
@@ -118,10 +137,11 @@ make openapi
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `POST` | `/api/v1/withdrawals` | Create, validate, approve, report |
+| `POST` | `/api/v1/withdrawals` | Create, validate, debit the wallet, approve, report |
 | `GET` | `/api/v1/withdrawals` | List owned operations |
 | `GET` | `/api/v1/withdrawals/{id}` | Read one owned operation |
 | `POST` | `/api/v1/withdrawals/{id}/cancel` | Cancel a `PENDING` operation |
+| `POST` | `/api/v1/withdrawals/{id}/reverse` | Reverse the full wallet debit |
 | `POST` | `/api/v1/withdrawals/{id}/report` | Retry ledger reporting |
 | `GET` | `/health` | Database readiness |
 
@@ -138,8 +158,9 @@ make openapi
 Common codes: `UNAUTHORIZED`, `MISSING_IDEMPOTENCY_KEY`, `INVALID_AMOUNT`,
 `DAILY_LIMIT_EXCEEDED`, `ACCOUNT_NOT_OWNED`, `ACCOUNT_NOT_FOUND`,
 `ACCOUNT_NOT_ELIGIBLE`, `IDEMPOTENCY_CONFLICT`, `IDEMPOTENCY_IN_PROGRESS`,
-`WITHDRAWAL_NOT_FOUND`, `INVALID_STATE`, `DEPENDENCY_UNAVAILABLE`, and
-`REPORTING_FAILED`.
+`WITHDRAWAL_NOT_FOUND`, `INVALID_STATE`, `DEPENDENCY_UNAVAILABLE`,
+`REPORTING_FAILED`, `WALLET_NOT_FOUND`, `INSUFFICIENT_BALANCE`, `USER_INACTIVE`,
+`WALLET_CONFLICT`, `WALLET_AUTH_FAILED`, and `WALLET_ALREADY_REVERSED`.
 
 ## Architecture references
 

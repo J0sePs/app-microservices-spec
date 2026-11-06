@@ -1,7 +1,8 @@
 # Acuerdo de integración — retiros en soles y billetera PEN
 
-**Estado:** propuesta para aprobación de los equipos de retiros, billetera,
-usuarios y depósitos.
+**Estado:** implementado en el cambio `integrate-pen-wallet-debit` el
+2026-11-06. El contrato publicado de la billetera es la referencia vigente; en
+particular, el JWT de servicio usa `sub=retiros`.
 
 **Alcance:** cómo descuenta el saldo `withdrawal-soles` cuando crea un retiro en
 PEN, cómo se identifica al dueño y cómo se convierte el monto.

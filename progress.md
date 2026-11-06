@@ -10,7 +10,7 @@ chat history is not.
 - Standard startup path: `./init.sh`
 - Standard verification path: `./scripts/verify.sh`
 - Current highest-priority unfinished feature: none — all registered features are `passing`; the other five services are follow-ups
-- Current blocker: none; the AWS practice stack was re-applied on 2026-11-06 and is running and billing (~$0.22/hour) until destroyed
+- Current blocker: none; the AWS practice stack is running and billing (~$0.22/hour) until destroyed
 
 ## Session Log
 
@@ -350,3 +350,42 @@ chat history is not.
 - Files or artifacts updated: `feature_list.json`, `progress.md`, `session-handoff.md`
 - Known risk or unresolved issue: the stack is running and billing; the public gateway has no authentication, so it is practice-only.
 - Next best step: use the gateway for practice, then run `./scripts/destroy-eks-demo.sh` to stop charges.
+
+### Session 014
+
+- Date: 2026-11-06
+- Goal: Integrate `withdrawal-soles` with the published PEN wallet and verify debit, reversal, and error behavior locally and live.
+- Completed:
+  - Created the `integrate-pen-wallet-debit` OpenSpec change with proposal, design, tasks, and the `pen-wallet-integration` spec.
+  - Added wallet settings, domain models/port/exceptions, `amount_to_cents`, JWT signing, and `WalletServiceClient` for `GET /v1/wallets`, `POST /v1/wallets/{walletId}/payments`, and `POST /v1/movements/{movementId}/reverse`.
+  - Extended `AccountOwnership` with integer `id_usuario` and parsed `id_usuario`/`idUsuario` in the user-service adapter.
+  - Added wallet columns, the `REVERSED` status, repository and mapper support, and Alembic migration `0002_add_wallet_integration`.
+  - Debit-in-create with local save compensation and `ReverseWithdrawalUseCase` behind `POST /api/v1/withdrawals/{id}/reverse`.
+  - Extended `tools/mock_dependencies.py` with the wallet endpoints and wallets for users 15, 16, and 18; user 17 has no wallet.
+  - Added `scripts/simulate_wallet_integration.py`, wallet adapter tests, API debit/reversal tests, and fake wallet fixtures.
+  - Regenerated `openapi.yaml` with 7 operations and the reverse endpoint; updated service docs, ERD, and the integration contract.
+  - Marked all change tasks complete and archived the change as `2026-11-06-integrate-pen-wallet-debit`; the main specs now include `pen-wallet-integration` and the updated `withdrawal-soles` lifecycle.
+- Verification run:
+  - `make verify` (ruff + pytest)
+  - `scripts/simulate_wallet_integration.py --mode simulate`
+  - `scripts/simulate_wallet_integration.py --mode live`
+  - `alembic upgrade head` against PostgreSQL 15 in Docker Compose
+  - `\d withdrawal_operations` inspection for wallet columns and `ck_status`
+  - `make openapi`
+  - `openspec validate --all --strict`
+  - `./init.sh`
+  - `docker compose down -v` after the migration check
+- Evidence captured:
+  - `make verify`: ruff clean, 83 tests passed.
+  - Simulator: 12/12 checks passed.
+  - Live wallet: 10/10 checks passed; debit movement `949366f5-5f68-4c78-9f08-ba422ac6f967`, wallet 15 balance `25000 -> 24000 -> 25000` cents after reversal.
+  - Migration: `0001 -> 0002_add_wallet_integration`; current head `0002_add_wallet_integration`.
+  - Schema: wallet columns present and `ck_status` includes `REVERSED`.
+  - OpenAPI: 7 operations including reverse; response includes `wallet_id`, `wallet_movement_id`, and `wallet_reversal_movement_id`.
+  - `openspec validate --all --strict`: 7 passed, 0 failed.
+  - `./init.sh`: VERIFICATION PASSED, 5/5 harness subsystems and 16/16 checks.
+  - `openspec archive integrate-pen-wallet-debit --yes`: archived as `2026-11-06-integrate-pen-wallet-debit`; specs `pen-wallet-integration` created and `withdrawal-soles` updated (2 requirements modified).
+- Commits: pending (wallet integration)
+- Files or artifacts updated: `src/withdrawal_soles/`, `tests/`, `migrations/versions/0002_add_wallet_integration.py`, `tools/mock_dependencies.py`, `scripts/simulate_wallet_integration.py`, `scripts/export_openapi.py`, `openapi.yaml`, `docs/withdrawal-soles.md`, `service-reference.md`, `withdrawal-soles-integration.md`, `openspec/architecture/`, `openspec/changes/archive/2026-11-06-integrate-pen-wallet-debit/`, `openspec/specs/`, `docker-compose.yml`, `.env.example`, `pyproject.toml`, `feature_list.json`, `progress.md`, `session-handoff.md`
+- Known risk or unresolved issue: the wallet JWT secret is the agreed development secret and is only 18 bytes; production must inject a strong secret. Live wallet calls depend on `http://18.228.136.200` being reachable.
+- Next best step: destroy the AWS practice stack with `./scripts/destroy-eks-demo.sh` when it is no longer needed, and redeploy with the new image before testing wallet debit through the gateway.

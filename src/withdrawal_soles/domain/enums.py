@@ -11,6 +11,7 @@ class WithdrawalStatus(StrEnum):
     REJECTED = "REJECTED"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
+    REVERSED = "REVERSED"
 
 
 class ReportStatus(StrEnum):
@@ -26,11 +27,16 @@ ALLOWED_TRANSITIONS: dict[WithdrawalStatus, frozenset[WithdrawalStatus]] = {
         {WithdrawalStatus.APPROVED, WithdrawalStatus.REJECTED}
     ),
     WithdrawalStatus.APPROVED: frozenset(
-        {WithdrawalStatus.COMPLETED, WithdrawalStatus.FAILED}
+        {
+            WithdrawalStatus.COMPLETED,
+            WithdrawalStatus.FAILED,
+            WithdrawalStatus.REVERSED,
+        }
     ),
     WithdrawalStatus.REJECTED: frozenset(),
-    WithdrawalStatus.COMPLETED: frozenset(),
-    WithdrawalStatus.FAILED: frozenset(),
+    WithdrawalStatus.COMPLETED: frozenset({WithdrawalStatus.REVERSED}),
+    WithdrawalStatus.FAILED: frozenset({WithdrawalStatus.REVERSED}),
+    WithdrawalStatus.REVERSED: frozenset(),
 }
 
 COUNTED_DAILY_STATUSES = (

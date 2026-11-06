@@ -45,11 +45,23 @@ def test_approved_can_complete_or_fail() -> None:
     assert failed.status == WithdrawalStatus.FAILED
 
 
+def test_debited_states_can_be_reversed() -> None:
+    for status in (
+        WithdrawalStatus.APPROVED,
+        WithdrawalStatus.COMPLETED,
+        WithdrawalStatus.FAILED,
+    ):
+        withdrawal = make_withdrawal(status)
+        withdrawal.transition_to(WithdrawalStatus.REVERSED, datetime.now(UTC))
+        assert withdrawal.status == WithdrawalStatus.REVERSED
+
+
 def test_terminal_states_cannot_transition() -> None:
     for status in (
         WithdrawalStatus.COMPLETED,
         WithdrawalStatus.REJECTED,
         WithdrawalStatus.FAILED,
+        WithdrawalStatus.REVERSED,
     ):
         with pytest.raises(InvalidState):
             make_withdrawal(status).transition_to(

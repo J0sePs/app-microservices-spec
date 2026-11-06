@@ -36,6 +36,9 @@ class WithdrawalResponse(BaseModel):
     currency: str
     status: WithdrawalStatus
     transaction_id: str | None
+    wallet_id: UUID | None = None
+    wallet_movement_id: UUID | None = None
+    wallet_reversal_movement_id: UUID | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -48,9 +51,20 @@ class WithdrawalResponse(BaseModel):
             currency=withdrawal.currency,
             status=withdrawal.status,
             transaction_id=withdrawal.transaction_id,
+            wallet_id=withdrawal.wallet_id,
+            wallet_movement_id=withdrawal.wallet_movement_id,
+            wallet_reversal_movement_id=withdrawal.wallet_reversal_movement_id,
             created_at=withdrawal.created_at,
             updated_at=withdrawal.updated_at,
         )
+
+
+class WithdrawalReverse(BaseModel):
+    """Payload for reversing a debited withdrawal."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(..., min_length=1, max_length=500)
 
 
 class WithdrawalListResponse(BaseModel):

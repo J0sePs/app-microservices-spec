@@ -21,6 +21,17 @@ def serialize_withdrawal(withdrawal: Withdrawal) -> dict[str, object]:
         "currency": withdrawal.currency,
         "status": withdrawal.status.value,
         "transaction_id": withdrawal.transaction_id,
+        "wallet_id": str(withdrawal.wallet_id) if withdrawal.wallet_id else None,
+        "wallet_movement_id": (
+            str(withdrawal.wallet_movement_id)
+            if withdrawal.wallet_movement_id
+            else None
+        ),
+        "wallet_reversal_movement_id": (
+            str(withdrawal.wallet_reversal_movement_id)
+            if withdrawal.wallet_reversal_movement_id
+            else None
+        ),
         "created_at": _iso(withdrawal.created_at),
         "updated_at": _iso(withdrawal.updated_at),
     }

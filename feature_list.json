@@ -160,6 +160,33 @@
       ],
       "status": "passing",
       "notes": "Second-stage Terraform root module. Deployed on 2026-11-06 and verified through the public gateway; the stack is running and billing. Destroy with ./scripts/destroy-eks-demo.sh when finished."
+    },
+    {
+      "id": "wallet-001",
+      "priority": 5,
+      "area": "withdrawal-soles",
+      "title": "PEN wallet debit and reversal are integrated",
+      "user_visible_behavior": "A withdrawal resolves the wallet identity from user-service, debits the PEN wallet in integer cents, stores the movement identifiers, and can reverse the full amount; wallet failures create no withdrawal and map to stable error codes.",
+      "status": "passing",
+      "change": "integrate-pen-wallet-debit",
+      "verification": [
+        "Run the wallet adapter, API, state-machine, and repository tests and confirm they pass.",
+        "Run scripts/simulate_wallet_integration.py --mode simulate and confirm every check passes.",
+        "Run scripts/simulate_wallet_integration.py --mode live against the published wallet with S/ 10.00 and confirm the balance is restored after reversal.",
+        "Run alembic upgrade head against PostgreSQL 15 and confirm the wallet columns and REVERSED status constraint exist.",
+        "Regenerate openapi.yaml, run openspec validate --all --strict, make verify, and ./init.sh."
+      ],
+      "evidence": [
+        "make verify: ruff All checks passed; pytest 83 passed",
+        "scripts/simulate_wallet_integration.py --mode simulate: 12/12 checks passed, covering debit, replay, insufficient balance, missing wallet, wallet outage, report failure with debit retention, reversal of APPROVED, balance restoration, and second reversal rejection",
+        "scripts/simulate_wallet_integration.py --mode live: 10/10 checks passed; debit movement 949366f5-5f68-4c78-9f08-ba422ac6f967; wallet 15 balance 25000 -> 24000 -> 25000 cents after reversal",
+        "Alembic upgrade head on PostgreSQL 15 through Docker Compose: 0001 -> 0002_add_wallet_integration; current is 0002_add_wallet_integration (head)",
+        "PostgreSQL \\d withdrawal_operations: wallet_user_id, wallet_id, wallet_movement_id, wallet_reversal_movement_id, wallet_debited_at, and wallet_reversed_at columns plus ck_status including REVERSED",
+        "make openapi: 7 operations including POST /api/v1/withdrawals/{withdrawal_id}/reverse and wallet fields in the response schema",
+        "openspec validate --all --strict: 7 passed, 0 failed, including change/integrate-pen-wallet-debit",
+        "./init.sh: VERIFICATION PASSED, 5/5 harness subsystems and 16/16 checks"
+      ],
+      "notes": "The wallet is the sole balance owner. Archived as 2026-11-06-integrate-pen-wallet-debit. Live simulation is safe to rerun because it reverses the S/ 10.00 debit and restores the seeded balance."
     }
   ]
 }

@@ -27,7 +27,8 @@ in pull requests.
 ## Rules
 
 1. One service owns one database. Never query another service's database.
-2. All external and inter-service traffic goes through Traefik.
+2. Client and inter-service traffic goes through Traefik, except calls to the
+   external PEN wallet, which uses its published base URL directly.
 3. Every mutation requires an `Idempotency-Key`.
 4. Identity is forwarded by the gateway as `X-User-Id`.
 5. Update this directory in the same change that alters a boundary, table, or

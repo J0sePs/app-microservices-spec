@@ -249,3 +249,133 @@ async def test_daily_limit_via_api(client) -> None:
     response = await create(client, key="daily-3", amount="200.00")
     assert response.status_code == 422
     assert response.json()["code"] == "DAILY_LIMIT_EXCEEDED"
+
+
+async def test_create_debits_wallet_and_exposes_movement(
+    client, wallet_service
+) -> None:
+    before = wallet_service.wallet_for(15).balance
+    response = await create(client, key="wallet-debit", amount="10.00")
+    assert response.status_code == 201
+    body = response.json()
+    assert body["status"] == "COMPLETED"
+    assert body["wallet_id"] == str(wallet_service.wallet_for(15).id)
+    assert body["wallet_movement_id"]
+    assert wallet_service.wallet_for(15).balance == before - 1000
+    assert wallet_service.debit_calls == 1
+
+
+async def test_wallet_replay_does_not_debit_twice(client, wallet_service) -> None:
+    first = await create(client, key="wallet-replay", amount="10.00")
+    after_first = wallet_service.wallet_for(15).balance
+    second = await create(client, key="wallet-replay", amount="10.00")
+
+    assert first.status_code == 201
+    assert second.status_code == 200
+    assert second.json()["id"] == first.json()["id"]
+    assert wallet_service.debit_calls == 1
+    assert wallet_service.wallet_for(15).balance == after_first
+
+
+async def test_insufficient_balance_creates_no_withdrawal(
+    client, user_service, wallet_service
+) -> None:
+    user_service.set_account(id_usuario=16)
+    response = await create(client, key="wallet-insufficient", amount="20.00")
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "INSUFFICIENT_BALANCE"
+    assert wallet_service.debit_calls == 0
+    listing = await client.get("/api/v1/withdrawals", headers=headers())
+    assert listing.json()["total"] == 0
+
+
+async def test_missing_wallet_returns_404_and_no_withdrawal(
+    client, user_service
+) -> None:
+    user_service.set_account(id_usuario=17)
+    response = await create(client, key="wallet-missing", amount="10.00")
+
+    assert response.status_code == 404
+    assert response.json()["code"] == "WALLET_NOT_FOUND"
+    listing = await client.get("/api/v1/withdrawals", headers=headers())
+    assert listing.json()["total"] == 0
+
+
+async def test_wallet_unavailable_creates_no_withdrawal(
+    client, wallet_service
+) -> None:
+    from withdrawal_soles.domain.exceptions import DependencyUnavailable
+
+    wallet_service.get_error = DependencyUnavailable("billetera")
+    response = await create(client, key="wallet-down", amount="10.00")
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "DEPENDENCY_UNAVAILABLE"
+    listing = await client.get("/api/v1/withdrawals", headers=headers())
+    assert listing.json()["total"] == 0
+
+
+async def test_report_failure_keeps_debit_and_approved_status(
+    client, transaction_service, wallet_service
+) -> None:
+    transaction_service.failures_remaining = 1
+    before = wallet_service.wallet_for(15).balance
+    response = await create(client, key="wallet-report-fail", amount="10.00")
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["status"] == "APPROVED"
+    assert body["wallet_movement_id"]
+    assert wallet_service.wallet_for(15).balance == before - 1000
+
+
+async def test_reverse_restores_balance_and_is_rejected_twice(
+    client, wallet_service
+) -> None:
+    created = await create(client, key="wallet-reverse", amount="10.00")
+    assert created.status_code == 201
+    after_debit = wallet_service.wallet_for(15).balance
+
+    response = await client.post(
+        f"/api/v1/withdrawals/{created.json()['id']}/reverse",
+        json={"reason": "retiro anulado"},
+        headers=headers(idempotency_key="wallet-reverse-1"),
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "REVERSED"
+    assert body["wallet_reversal_movement_id"]
+    assert wallet_service.wallet_for(15).balance == after_debit + 1000
+
+    second = await client.post(
+        f"/api/v1/withdrawals/{created.json()['id']}/reverse",
+        json={"reason": "retiro anulado"},
+        headers=headers(idempotency_key="wallet-reverse-2"),
+    )
+    assert second.status_code == 422
+    assert second.json()["code"] == "WALLET_ALREADY_REVERSED"
+
+
+async def test_reverse_without_debit_returns_409(client, session) -> None:
+    withdrawal = Withdrawal(
+        id=uuid4(),
+        account_id=OTHER_ACCOUNT_ID,
+        user_id=USER_ID,
+        amount=Decimal("100.00"),
+        currency="PEN",
+        status=WithdrawalStatus.COMPLETED,
+        created_at=FixedClock().now(),
+        updated_at=FixedClock().now(),
+    )
+    repository = SQLAlchemyWithdrawalRepository(session)
+    await repository.add(withdrawal)
+    await session.commit()
+
+    response = await client.post(
+        f"/api/v1/withdrawals/{withdrawal.id}/reverse",
+        json={"reason": "retiro anulado"},
+        headers=headers(idempotency_key="no-debit-reverse"),
+    )
+    assert response.status_code == 409
+    assert response.json()["code"] == "INVALID_STATE"

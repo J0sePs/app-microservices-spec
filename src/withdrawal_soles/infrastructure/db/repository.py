@@ -52,6 +52,12 @@ class SQLAlchemyWithdrawalRepository:
         row.currency = withdrawal.currency
         row.status = withdrawal.status.value
         row.transaction_id = withdrawal.transaction_id
+        row.wallet_user_id = withdrawal.wallet_user_id
+        row.wallet_id = withdrawal.wallet_id
+        row.wallet_movement_id = withdrawal.wallet_movement_id
+        row.wallet_reversal_movement_id = withdrawal.wallet_reversal_movement_id
+        row.wallet_debited_at = withdrawal.wallet_debited_at
+        row.wallet_reversed_at = withdrawal.wallet_reversed_at
         row.updated_at = withdrawal.updated_at
         await self._session.flush()
 
