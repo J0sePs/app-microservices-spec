@@ -419,7 +419,7 @@ chat history is not.
   - Users contract: active user 15 proceeds; active user 19 has no wallet (`WALLET_NOT_FOUND`); inactive user 17 returns `USER_INACTIVE`; unknown user 99 returns `USER_NOT_FOUND`.
   - `openspec validate --all --strict`: 8 passed, 0 failed.
   - `./init.sh`: VERIFICATION PASSED, 5/5 harness subsystems and 16/16 checks.
-- Commits: pending (JWT and users contract)
+- Commits: `ff049f2 feat(auth): require service JWT and validate users contract`
 - Files or artifacts updated: `src/withdrawal_soles/api/security.py`, `src/withdrawal_soles/api/dependencies.py`, `src/withdrawal_soles/api/errors.py`, `src/withdrawal_soles/core/settings.py`, `src/withdrawal_soles/domain/`, `src/withdrawal_soles/application/use_cases.py`, `src/withdrawal_soles/infrastructure/`, `tests/`, `tools/mock_dependencies.py`, `scripts/simulate_wallet_integration.py`, `scripts/wallet_contract_check.py`, `scripts/export_openapi.py`, `Makefile`, `docker-compose.yml`, `.env.example`, `openapi.yaml`, docs, `openspec/`, `feature_list.json`, `progress.md`, `session-handoff.md`
 - Known risk or unresolved issue: the development secret is shared and only 18 bytes; production must inject a strong secret. The deployed EKS image predates this change, so the gateway must be redeployed before testing JWT and the users contract there.
 - Next best step: redeploy the image when the gateway is needed, or destroy the AWS practice stack to stop charges.
