@@ -10,7 +10,7 @@ chat history is not.
 - Standard startup path: `./init.sh`
 - Standard verification path: `./scripts/verify.sh`
 - Current highest-priority unfinished feature: none — all registered features are `passing`; the other five services are follow-ups
-- Current blocker: none; the AWS practice stack is running and billing (~$0.22/hour) until destroyed
+- Current blocker: none; the AWS practice stack state is documented in `session-handoff.md`
 
 ## Session Log
 
@@ -389,3 +389,37 @@ chat history is not.
 - Files or artifacts updated: `src/withdrawal_soles/`, `tests/`, `migrations/versions/0002_add_wallet_integration.py`, `tools/mock_dependencies.py`, `scripts/simulate_wallet_integration.py`, `scripts/export_openapi.py`, `openapi.yaml`, `docs/withdrawal-soles.md`, `service-reference.md`, `withdrawal-soles-integration.md`, `openspec/architecture/`, `openspec/changes/archive/2026-11-06-integrate-pen-wallet-debit/`, `openspec/specs/`, `docker-compose.yml`, `.env.example`, `pyproject.toml`, `feature_list.json`, `progress.md`, `session-handoff.md`
 - Known risk or unresolved issue: the wallet JWT secret is the agreed development secret and is only 18 bytes; production must inject a strong secret. Live wallet calls depend on `http://18.228.136.200` being reachable.
 - Next best step: destroy the AWS practice stack with `./scripts/destroy-eks-demo.sh` when it is no longer needed, and redeploy with the new image before testing wallet debit through the gateway.
+
+### Session 015
+
+- Date: 2026-11-06
+- Goal: Apply `PARA-INTEGRAR-RETIROS-3.md` to `withdrawal-soles`: JWT-only business routes and the published users-service contract, plus a teammate-facing HTTP checker.
+- Completed:
+  - Created the `secure-api-jwt-users-contract` OpenSpec change with proposal, design, tasks, and spec deltas.
+  - Added mandatory inbound service JWT validation (HS256, issuer `billetera-dev`, subject `retiros`) on every `/api/v1/withdrawals` route; `X-User-Id` remains the end-user identity and is still required.
+  - Added `UserIdentity`, `UserNotFound`, `UserInactive`, and `UserServicePort.get_user`; `GET /usuarios/{idUsuario}` now runs before every debit and reversal with the `billetera-service` JWT and the documented 404/422/503 mapping.
+  - Added shared service-JWT signing, the users call in the use cases, and the new settings (`USERS_*` and `AUTH_JWT_*`).
+  - Extended the mock with `/usuarios/{idUsuario}` and the same JWT verification; Traefik now routes `/usuarios` to the mock.
+  - Extended the simulator with auth, users cases, and wallet history; added `scripts/wallet_contract_check.py` and `make contract-check`.
+  - Regenerated `openapi.yaml` with the `BearerAuth` scheme and updated the integration documents, service reference, README, `.env.example`, and architecture contract.
+  - Archived the change as `2026-11-06-secure-api-jwt-users-contract`; the main specs now include `service-authentication` and the updated wallet/users requirements.
+- Verification run:
+  - `make verify` (ruff + pytest)
+  - `scripts/simulate_wallet_integration.py --mode simulate`
+  - `scripts/simulate_wallet_integration.py --mode live`
+  - `docker compose up -d --build` and `scripts/wallet_contract_check.py --base-url http://localhost:8080 --wallet-url http://localhost:8080`
+  - `make openapi`
+  - `openspec validate --all --strict`
+  - `./init.sh`
+- Evidence captured:
+  - `make verify`: ruff clean, 106 tests passed.
+  - Simulator: 15/15 checks passed in `simulate` mode; 9/9 in `live` mode with wallet 15 balance `50000 -> 49000 -> 50000` cents.
+  - HTTP checker: 11/11 checks passed against the compose stack; debit movement `c8e8ca76-0eb5-4531-9375-75df0ef7f862`; balance restored.
+  - Auth: missing token and valid-token-without-`X-User-Id` both return `401 UNAUTHORIZED` with `WWW-Authenticate: Bearer`.
+  - Users contract: active user 15 proceeds; active user 19 has no wallet (`WALLET_NOT_FOUND`); inactive user 17 returns `USER_INACTIVE`; unknown user 99 returns `USER_NOT_FOUND`.
+  - `openspec validate --all --strict`: 8 passed, 0 failed.
+  - `./init.sh`: VERIFICATION PASSED, 5/5 harness subsystems and 16/16 checks.
+- Commits: pending (JWT and users contract)
+- Files or artifacts updated: `src/withdrawal_soles/api/security.py`, `src/withdrawal_soles/api/dependencies.py`, `src/withdrawal_soles/api/errors.py`, `src/withdrawal_soles/core/settings.py`, `src/withdrawal_soles/domain/`, `src/withdrawal_soles/application/use_cases.py`, `src/withdrawal_soles/infrastructure/`, `tests/`, `tools/mock_dependencies.py`, `scripts/simulate_wallet_integration.py`, `scripts/wallet_contract_check.py`, `scripts/export_openapi.py`, `Makefile`, `docker-compose.yml`, `.env.example`, `openapi.yaml`, docs, `openspec/`, `feature_list.json`, `progress.md`, `session-handoff.md`
+- Known risk or unresolved issue: the development secret is shared and only 18 bytes; production must inject a strong secret. The deployed EKS image predates this change, so the gateway must be redeployed before testing JWT and the users contract there.
+- Next best step: redeploy the image when the gateway is needed, or destroy the AWS practice stack to stop charges.

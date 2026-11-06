@@ -4,13 +4,16 @@ info:
   description: 'PEN withdrawal microservice for the banking platform.
 
 
-    Every request carries the gateway-injected `X-User-Id` header. Every mutating request also requires
-    an `Idempotency-Key`. Amounts are decimal strings in PEN; the minimum is 10.00, the maximum per operation
-    is 5000.00, and the daily accumulated limit per account is 10000.00.
+    Every business request carries `Authorization: Bearer <jwt>` (HS256, issuer `billetera-dev`, subject
+    `retiros`) and the `X-User-Id` header with the end-user UUID. Without the token the service responds
+    `401`. Every mutating request also requires an `Idempotency-Key`. Amounts are decimal strings in PEN;
+    the minimum is 10.00, the maximum per operation is 5000.00, and the daily accumulated limit per account
+    is 10000.00.
 
 
-    The external PEN wallet is the balance owner. A successful withdrawal debits the wallet before it
-    is persisted and stores the wallet and movement identifiers; `POST /api/v1/withdrawals/{id}/reverse`
+    The external PEN wallet is the balance owner. Before debiting or reversing, the service validates
+    the wallet owner with `GET /usuarios/{idUsuario}`. A successful withdrawal debits the wallet before
+    it is persisted and stores the wallet and movement identifiers; `POST /api/v1/withdrawals/{id}/reverse`
     returns the full amount to the wallet.'
   version: 0.1.0
   contact:
@@ -23,6 +26,8 @@ paths:
       - withdrawals
       summary: Create a PEN withdrawal
       operationId: createWithdrawal
+      security:
+      - BearerAuth: []
       parameters:
       - name: X-User-Id
         in: header
@@ -30,7 +35,8 @@ paths:
         schema:
           type: string
           format: uuid
-        description: Caller identity injected by the API gateway. Must be a UUID.
+        description: End-user identity as a UUID. Required in addition to the service bearer token; the
+          token authenticates the caller, not the customer.
       - name: Idempotency-Key
         in: header
         required: true
@@ -101,6 +107,8 @@ paths:
       - withdrawals
       summary: List owned withdrawals
       operationId: listWithdrawals
+      security:
+      - BearerAuth: []
       parameters:
       - name: account_id
         in: query
@@ -142,7 +150,8 @@ paths:
         schema:
           type: string
           format: uuid
-        description: Caller identity injected by the API gateway. Must be a UUID.
+        description: End-user identity as a UUID. Required in addition to the service bearer token; the
+          token authenticates the caller, not the customer.
       responses:
         '200':
           description: Successful Response
@@ -193,6 +202,8 @@ paths:
       - withdrawals
       summary: Read one owned withdrawal
       operationId: getWithdrawal
+      security:
+      - BearerAuth: []
       parameters:
       - name: withdrawal_id
         in: path
@@ -207,7 +218,8 @@ paths:
         schema:
           type: string
           format: uuid
-        description: Caller identity injected by the API gateway. Must be a UUID.
+        description: End-user identity as a UUID. Required in addition to the service bearer token; the
+          token authenticates the caller, not the customer.
       responses:
         '200':
           description: Successful Response
@@ -258,6 +270,8 @@ paths:
       - withdrawals
       summary: Cancel a pending withdrawal
       operationId: cancelWithdrawal
+      security:
+      - BearerAuth: []
       parameters:
       - name: withdrawal_id
         in: path
@@ -272,7 +286,8 @@ paths:
         schema:
           type: string
           format: uuid
-        description: Caller identity injected by the API gateway. Must be a UUID.
+        description: End-user identity as a UUID. Required in addition to the service bearer token; the
+          token authenticates the caller, not the customer.
       - name: Idempotency-Key
         in: header
         required: true
@@ -331,6 +346,8 @@ paths:
       - withdrawals
       summary: Reverse a debited withdrawal
       operationId: reverseWithdrawal
+      security:
+      - BearerAuth: []
       parameters:
       - name: withdrawal_id
         in: path
@@ -345,7 +362,8 @@ paths:
         schema:
           type: string
           format: uuid
-        description: Caller identity injected by the API gateway. Must be a UUID.
+        description: End-user identity as a UUID. Required in addition to the service bearer token; the
+          token authenticates the caller, not the customer.
       - name: Idempotency-Key
         in: header
         required: true
@@ -411,6 +429,8 @@ paths:
       - withdrawals
       summary: Retry ledger reporting
       operationId: retryWithdrawalReport
+      security:
+      - BearerAuth: []
       parameters:
       - name: withdrawal_id
         in: path
@@ -425,7 +445,8 @@ paths:
         schema:
           type: string
           format: uuid
-        description: Caller identity injected by the API gateway. Must be a UUID.
+        description: End-user identity as a UUID. Required in addition to the service bearer token; the
+          token authenticates the caller, not the customer.
       - name: Idempotency-Key
         in: header
         required: true
@@ -681,6 +702,12 @@ components:
       - REVERSED
       title: WithdrawalStatus
       description: Lifecycle states allowed for a withdrawal.
+  securitySchemes:
+    BearerAuth:
+      type: http
+      description: Service JWT signed with HS256, issuer `billetera-dev`, and subject `retiros`. The token
+        authenticates the caller; the end-user identity still travels in `X-User-Id`.
+      scheme: bearer
 servers:
 - url: http://a6c1a4b5ffa8a44808f8a8a0784fe0d7-266125410.us-east-1.elb.amazonaws.com
   description: AWS EKS public gateway (Traefik LoadBalancer)

@@ -4,11 +4,12 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from withdrawal_soles.api.errors import install_error_handlers
 from withdrawal_soles.api.routes import health, withdrawals
+from withdrawal_soles.api.security import require_service_token
 from withdrawal_soles.core.settings import Settings, get_settings
 from withdrawal_soles.infrastructure.clients.transaction_service import (
     TransactionServiceClient,
@@ -72,7 +73,9 @@ def create_app(
     app.state.ids = resolved_ids
 
     install_error_handlers(app)
-    app.include_router(withdrawals.router)
+    app.include_router(
+        withdrawals.router, dependencies=[Depends(require_service_token)]
+    )
     app.include_router(health.router)
 
     @app.get("/", include_in_schema=False)

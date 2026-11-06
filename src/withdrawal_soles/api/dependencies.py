@@ -140,11 +140,14 @@ def get_retry_report_use_case(
 
 def get_reverse_use_case(
     repository: Annotated[SQLAlchemyWithdrawalRepository, Depends(get_repository)],
+    user_service: Annotated[UserService, Depends(get_user_service)],
     wallet_service: Annotated[WalletService, Depends(get_wallet_service)],
     clock: Annotated[Clock, Depends(get_clock)],
     ids: Annotated[IdGenerator, Depends(get_ids)],
 ) -> ReverseWithdrawalUseCase:
-    return ReverseWithdrawalUseCase(repository, wallet_service, clock, ids)
+    return ReverseWithdrawalUseCase(
+        repository, user_service, wallet_service, clock, ids
+    )
 
 
 UserId = Annotated[UUID, Depends(require_user_id)]

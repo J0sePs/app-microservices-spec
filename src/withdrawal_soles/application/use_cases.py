@@ -25,6 +25,7 @@ from withdrawal_soles.domain.exceptions import (
     InsufficientBalance,
     InvalidState,
     ReportingError,
+    UserInactive,
     WalletAlreadyReversed,
     WithdrawalNotFound,
 )
@@ -173,6 +174,9 @@ class CreateWithdrawalUseCase:
     ) -> None:
         """Debit the exact amount before the operation is reported."""
 
+        user = await self._user_service.get_user(id_usuario)
+        if not user.active:
+            raise UserInactive()
         wallet = await self._wallet_service.get_wallet(id_usuario)
         amount_cents = amount_to_cents(amount)
         if wallet.balance < amount_cents:
@@ -423,11 +427,13 @@ class ReverseWithdrawalUseCase:
     def __init__(
         self,
         repository: WithdrawalRepository,
+        user_service: UserServicePort,
         wallet_service: WalletServicePort,
         clock: Clock,
         ids: IdGenerator,
     ) -> None:
         self._repository = repository
+        self._user_service = user_service
         self._wallet_service = wallet_service
         self._clock = clock
         self._ids = ids
@@ -447,6 +453,11 @@ class ReverseWithdrawalUseCase:
             raise InvalidState(
                 withdrawal.status.value, WithdrawalStatus.REVERSED.value
             )
+
+        if withdrawal.wallet_user_id is not None:
+            user = await self._user_service.get_user(withdrawal.wallet_user_id)
+            if not user.active:
+                raise UserInactive()
 
         movement = await self._wallet_service.reverse(
             withdrawal.wallet_movement_id,

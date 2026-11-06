@@ -9,17 +9,22 @@ is called directly at its published base URL.
 | Rule | Value |
 | --- | --- |
 | Gateway | Traefik v3 |
+| Service token | `Authorization: Bearer <jwt>` (HS256, issuer `billetera-dev`, subject `retiros`) |
 | Identity header | `X-User-Id` (injected by Traefik) |
 | Role header | `X-User-Role` (injected by Traefik) |
 | Idempotency header | `Idempotency-Key` (required on every mutation) |
 | Content type | `application/json` |
 | User request timeout | 2 seconds |
+| Users contract timeout | 2 seconds |
 | Wallet request timeout | 2 seconds |
 | Transaction report timeout | 3 seconds |
 | Retry bound | 3 attempts with exponential backoff |
 
-Missing `X-User-Id` returns `401`. Services must ignore any identity header
-supplied directly by a client; only gateway-injected values are trusted.
+A missing or invalid service token returns `401` with `WWW-Authenticate: Bearer`.
+A valid token without `X-User-Id` also returns `401`. The token authenticates
+the calling service; `X-User-Id` identifies the end user. Services must ignore
+any identity header supplied directly by a client; only gateway-injected values
+are trusted.
 
 ## Error envelope
 
@@ -51,7 +56,8 @@ supplied directly by a client; only gateway-injected values are trusted.
 
 `POST /api/v1/withdrawals`
 
-Required headers: `X-User-Id`, `Idempotency-Key`, `Content-Type`.
+Required headers: `Authorization`, `X-User-Id`, `Idempotency-Key`,
+`Content-Type`.
 
 ```json
 {
@@ -84,25 +90,27 @@ must be retried. If the wallet debit fails, no withdrawal is created.
 }
 ```
 
-Errors: `401` missing identity, `404` wallet not found, `409` key reused with a
-different body or wallet conflict, `422` amount outside `10.00`–`5000.00`,
+Errors: `401` missing or invalid token or identity, `404 USER_NOT_FOUND` when
+users-service reports no such user, `404` wallet not found, `409` key reused
+with a different body or wallet conflict, `422` amount outside `10.00`–`5000.00`,
 daily limit exceeded, non-PEN account, inactive account or user, or
-insufficient balance, and `503` when `user-service` or the wallet is unavailable
-or rejects authentication.
+insufficient balance, and `503` when `user-service`, users-service, or the
+wallet is unavailable or rejects authentication.
 
 ### Get a withdrawal
 
 `GET /api/v1/withdrawals/{id}`
 
-Required headers: `X-User-Id`. Returns the same representation as the create
-response. Returns `404` when the operation does not exist or does not belong to
-the caller.
+Required headers: `Authorization`, `X-User-Id`. Returns the same representation
+as the create response. Returns `404` when the operation does not exist or does
+not belong to the caller.
 
 ### Cancel a withdrawal
 
 `POST /api/v1/withdrawals/{id}/cancel`
 
-Required headers: `X-User-Id`, `Idempotency-Key`, `Content-Type`.
+Required headers: `Authorization`, `X-User-Id`, `Idempotency-Key`,
+`Content-Type`.
 
 Only `PENDING` operations can be cancelled. Returns `200` with status
 `REJECTED`; an already cancelled operation returns the same result. A
@@ -112,7 +120,8 @@ non-pending operation returns `409`.
 
 `POST /api/v1/withdrawals/{id}/report`
 
-Required headers: `X-User-Id`, `Idempotency-Key`. Only the owner can retry an
+Required headers: `Authorization`, `X-User-Id`, `Idempotency-Key`. Only the
+owner can retry an
 `APPROVED` operation. Returns `200` with `COMPLETED` when the ledger accepts the
 report, or `202` with `APPROVED` when the report still fails. A completed
 operation returns `200` unchanged; any other status returns `409`.
@@ -121,7 +130,8 @@ operation returns `200` unchanged; any other status returns `409`.
 
 `POST /api/v1/withdrawals/{id}/reverse`
 
-Required headers: `X-User-Id`, `Idempotency-Key`, `Content-Type`.
+Required headers: `Authorization`, `X-User-Id`, `Idempotency-Key`,
+`Content-Type`.
 
 ```json
 {
@@ -170,6 +180,30 @@ DEPENDENCY_UNAVAILABLE` before calling the wallet.
 
 Errors: `401` missing identity, `403` account belongs to another user, `404`
 account not found.
+
+## user-service: wallet-owner status
+
+`GET /usuarios/{idUsuario}`
+
+Required headers: `Authorization` (JWT `sub=billetera-service`), `Accept`.
+Called by the wallet and by `withdrawal-soles` before a debit or a reversal,
+with a 2-second budget.
+
+```json
+{ "idUsuario": 15, "estado": true }
+```
+
+`id_usuario` is accepted as an alias for `idUsuario`. The body id must equal the
+path id and `estado` must be the boolean `true`.
+
+| users-service result | withdrawal-soles |
+| --- | --- |
+| `200` and `estado: true` | continue to the wallet |
+| `404` or id mismatch | `404 USER_NOT_FOUND` |
+| `200` and `estado` not `true` | `422 USER_INACTIVE` |
+| timeout or any other status | `503 DEPENDENCY_UNAVAILABLE` |
+
+No withdrawal, movement, or reversal is written when this validation fails.
 
 ## transaction-service: operation report
 

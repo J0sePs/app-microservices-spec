@@ -1,8 +1,11 @@
 # Acuerdo de integración — retiros en soles y billetera PEN
 
 **Estado:** implementado en el cambio `integrate-pen-wallet-debit` el
-2026-11-06. El contrato publicado de la billetera es la referencia vigente; en
-particular, el JWT de servicio usa `sub=retiros`.
+2026-11-06 y ampliado en `secure-api-jwt-users-contract` el mismo día. El
+contrato publicado de la billetera es la referencia vigente; en particular, el
+JWT de servicio usa `sub=retiros`. Desde la ampliación, retiros también exige
+JWT en su propia API y valida al dueño con `GET /usuarios/{idUsuario}` antes de
+debitar o reversar.
 
 **Alcance:** cómo descuenta el saldo `withdrawal-soles` cuando crea un retiro en
 PEN, cómo se identifica al dueño y cómo se convierte el monto.
@@ -139,6 +142,11 @@ Respuesta mínima:
 { "idUsuario": 15, "estado": true }
 ```
 
+Retiros usa el mismo contrato antes de cada débito y cada reverso. Antes de esta
+ampliación solo lo usaba la billetera; ahora la validación es doble y falla
+cerrado: `404 USER_NOT_FOUND`, `422 USER_INACTIVE` o `503
+DEPENDENCY_UNAVAILABLE`, sin movimiento.
+
 ### Por qué no una tabla de configuración
 
 La relación UUID → entero no debe mantenerse a mano en retiros ni en la
@@ -194,7 +202,8 @@ Hay dos contratos distintos y ambos deben existir:
 | Consumidor | Endpoint | Auth | Respuesta |
 | --- | --- | --- | --- |
 | Retiros | `GET /api/v1/accounts/{account_id}/ownership` | `X-User-Id` | cuenta, dueño, `id_usuario`, estado |
-| Billetera | `GET /usuarios/{idUsuario}` | JWT `sub=billetera-service` | `{idUsuario, estado}` |
+| Retiros y billetera | `GET /usuarios/{idUsuario}` | JWT `sub=billetera-service` | `{idUsuario, estado}` |
+| Cliente de retiros | `POST /api/v1/withdrawals` y demás rutas | JWT `sub=retiros` + `X-User-Id` | operación de retiro |
 
 El equipo de usuarios debe entregar:
 
@@ -250,14 +259,16 @@ reversar.
 
 ## 8. Decisiones pendientes de aprobación
 
-- [ ] Aprobar que `user-service` agregue `id_usuario` a ownership.
-- [ ] Aprobar que el reporte fallido a transacciones deje el retiro `APPROVED`
+- [x] Aprobar que `user-service` agregue `id_usuario` a ownership.
+- [x] Aprobar que el reporte fallido a transacciones deje el retiro `APPROVED`
       sin reverso automático.
-- [ ] Aprobar la política de reverso solo cuando el retiro se anule después del
+- [x] Aprobar la política de reverso solo cuando el retiro se anule después del
       débito.
 - [ ] Confirmar quién crea y recarga la billetera de prueba (billetera o
       depósitos).
-- [ ] Confirmar la URL pública de usuarios y el `idUsuario` de prueba.
+- [x] Confirmar la URL pública de usuarios y el `idUsuario` de prueba: la
+      billetera publicó `http://18.228.136.200` con los usuarios 15, 16, 17 y 18.
+- [x] Adoptar el JWT de servicio (`sub=retiros`) también en la API de retiros.
 
 ## 9. Lo que no cambia
 

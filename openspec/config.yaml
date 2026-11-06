@@ -35,6 +35,9 @@ context: |
   - Authentication is delegated to the gateway. The service receives the
     caller identity in `X-User-Id`.
   - Every mutating endpoint requires an `Idempotency-Key`.
+- Every business endpoint requires a valid service JWT and `X-User-Id`; the
+  service validates the wallet owner with `GET /usuarios/{idUsuario}` before
+  debiting or reversing.
   - Errors use the envelope `{"code", "message", "details"}`.
   - Architecture documents live in `openspec/architecture/`: one system
     context diagram, one ERD per service, and the integration contract.

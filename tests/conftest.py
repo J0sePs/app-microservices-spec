@@ -1,5 +1,6 @@
 """Shared test fixtures and in-memory adapters."""
 
+import time
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -9,6 +10,7 @@ from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 import httpx
+import jwt
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,11 +18,14 @@ from withdrawal_soles.core.settings import Settings
 from withdrawal_soles.domain.exceptions import (
     InsufficientBalance,
     ReportingError,
+    UserInactive,
+    UserNotFound,
     WalletAlreadyReversed,
     WalletNotFound,
 )
 from withdrawal_soles.domain.models import (
     AccountOwnership,
+    UserIdentity,
     WalletBalance,
     WalletMovement,
     Withdrawal,
@@ -33,6 +38,8 @@ OTHER_ACCOUNT_ID = UUID("2d8b6f1f-5a5b-4b2a-8b4f-8c0a1e3b7d22")
 USER_ID = UUID("9d1e2f3a-4b5c-6d7e-8f90-1a2b3c4d5e6f")
 OTHER_USER_ID = UUID("7a6b5c4d-3e2f-4a1b-8c9d-0e1f2a3b4c5d")
 NOW = datetime(2026, 10, 30, 15, 0, tzinfo=UTC)
+SERVICE_JWT_SECRET = "dev-only-change-me"
+SERVICE_JWT_ISSUER = "billetera-dev"
 
 
 class FixedClock:
@@ -54,12 +61,21 @@ class FixedClock:
 
 
 class FakeUserService:
-    """Configurable account ownership source."""
+    """Configurable account ownership and wallet-user source."""
 
     def __init__(self) -> None:
         self._accounts: dict[tuple[UUID, UUID], AccountOwnership] = {}
+        self.users: dict[int, bool] = {
+            15: True,
+            16: True,
+            17: False,
+            18: True,
+            19: True,
+        }
         self.error: Exception | None = None
+        self.user_error: Exception | None = None
         self.calls = 0
+        self.user_calls = 0
 
     def set_account(
         self,
@@ -97,6 +113,17 @@ class FakeUserService:
             owned=True,
             id_usuario=15,
         )
+
+    async def get_user(self, id_usuario: int) -> UserIdentity:
+        self.user_calls += 1
+        if self.user_error is not None:
+            raise self.user_error
+        active = self.users.get(id_usuario)
+        if active is None:
+            raise UserNotFound()
+        if not active:
+            raise UserInactive()
+        return UserIdentity(id_usuario=id_usuario, active=True)
 
 
 class FakeWalletService:
@@ -304,10 +331,36 @@ def wallet_service(app: Any) -> FakeWalletService:
     return app.state.wallet_service
 
 
+def service_token(
+    *,
+    subject: str = "retiros",
+    secret: str = SERVICE_JWT_SECRET,
+    issuer: str = SERVICE_JWT_ISSUER,
+    expires_in: int = 3600,
+) -> str:
+    issued_at = int(time.time())
+    return jwt.encode(
+        {
+            "sub": subject,
+            "iss": issuer,
+            "iat": issued_at,
+            "exp": issued_at + expires_in,
+        },
+        secret,
+        algorithm="HS256",
+    )
+
+
 def headers(
-    user_id: UUID = USER_ID, idempotency_key: str | None = "idem-1"
+    user_id: UUID = USER_ID,
+    idempotency_key: str | None = "idem-1",
+    *,
+    token: str | None = None,
 ) -> dict[str, str]:
-    values = {"X-User-Id": str(user_id)}
+    values = {
+        "Authorization": f"Bearer {token or service_token()}",
+        "X-User-Id": str(user_id),
+    }
     if idempotency_key is not None:
         values["Idempotency-Key"] = idempotency_key
     return values

@@ -19,8 +19,14 @@ def install_error_handlers(app: FastAPI) -> None:
     async def domain_error_handler(
         _request: Request, error: DomainError
     ) -> JSONResponse:
+        headers = (
+            {"WWW-Authenticate": "Bearer"}
+            if error.status_code == 401
+            else None
+        )
         return JSONResponse(
             status_code=error.status_code,
+            headers=headers,
             content={
                 "code": error.code,
                 "message": error.message,

@@ -30,9 +30,14 @@ if str(ROOT) not in sys.path:
 
 from tools.mock_dependencies import app as mock_wallet_app  # noqa: E402
 from withdrawal_soles.core.settings import Settings  # noqa: E402
-from withdrawal_soles.domain.exceptions import DependencyUnavailable  # noqa: E402
+from withdrawal_soles.domain.exceptions import (  # noqa: E402
+    DependencyUnavailable,
+    UserInactive,
+    UserNotFound,
+)
 from withdrawal_soles.domain.models import (  # noqa: E402
     AccountOwnership,
+    UserIdentity,
     WalletBalance,
     WalletMovement,
     Withdrawal,
@@ -42,19 +47,24 @@ from withdrawal_soles.infrastructure.clients.wallet_service import (  # noqa: E4
 )
 from withdrawal_soles.infrastructure.clock import SystemClock  # noqa: E402
 from withdrawal_soles.infrastructure.db.base import Base  # noqa: E402
+from withdrawal_soles.infrastructure.service_jwt import (  # noqa: E402
+    sign_service_token,
+)
 from withdrawal_soles.main import create_app  # noqa: E402
 
 ACCOUNT_ID = UUID("1c7a5e0e-4f4a-4a1f-9a3e-7b9f0d2a6c11")
 USER_ID = UUID("9d1e2f3a-4b5c-6d7e-8f90-1a2b3c4d5e6f")
 LIVE_BASE_URL = "http://18.228.136.200"
+SEED_USERS = {15: True, 16: True, 17: False, 18: True, 19: True}
 
 
 class SimulationUserService:
-    """Ownership source that can switch the wallet identity per scenario."""
+    """Ownership and users-contract source for the simulation."""
 
     def __init__(self) -> None:
         self.id_usuario = 15
         self.status = "ACTIVE"
+        self.get_user_calls = 0
 
     async def get_ownership(
         self, account_id: UUID, user_id: UUID
@@ -67,6 +77,15 @@ class SimulationUserService:
             owned=True,
             id_usuario=self.id_usuario,
         )
+
+    async def get_user(self, id_usuario: int) -> UserIdentity:
+        self.get_user_calls += 1
+        active = SEED_USERS.get(id_usuario)
+        if active is None:
+            raise UserNotFound()
+        if not active:
+            raise UserInactive()
+        return UserIdentity(id_usuario=id_usuario, active=True)
 
 
 class SimulationTransactionService:
@@ -137,7 +156,17 @@ class Results:
 
 
 def headers(key: str | None = None) -> dict[str, str]:
-    values = {"X-User-Id": str(USER_ID), "Content-Type": "application/json"}
+    token = sign_service_token(
+        secret="dev-only-change-me",
+        issuer="billetera-dev",
+        subject="retiros",
+        ttl_seconds=3600,
+    )
+    values = {
+        "Authorization": f"Bearer {token}",
+        "X-User-Id": str(USER_ID),
+        "Content-Type": "application/json",
+    }
     if key is not None:
         values["Idempotency-Key"] = key
     return values
@@ -286,18 +315,47 @@ async def run(mode: str, amount: str, id_usuario: int) -> int:
                 f"code={insufficient.json().get('code')}",
             )
 
-            # Missing wallet: user 17 has no wallet.
-            user_service.id_usuario = 17
-            missing = await create_withdrawal(
-                client, key=f"sim-missing-{uuid4()}", amount=amount
-            )
-            results.check(
-                "missing wallet",
-                missing.status_code == 404
-                and missing.json().get("code") == "WALLET_NOT_FOUND"
-                and await list_total(client) == total_before_failure,
-                f"HTTP {missing.status_code} code={missing.json().get('code')}",
-            )
+            # Missing wallet: user 19 is active but has no wallet (simulator only).
+            if mode == "simulate":
+                user_service.id_usuario = 19
+                missing = await create_withdrawal(
+                    client, key=f"sim-missing-{uuid4()}", amount=amount
+                )
+                results.check(
+                    "missing wallet",
+                    missing.status_code == 404
+                    and missing.json().get("code") == "WALLET_NOT_FOUND"
+                    and await list_total(client) == total_before_failure,
+                    f"HTTP {missing.status_code} code={missing.json().get('code')}",
+                )
+
+                # Inactive wallet user: user 17 fails before any wallet call.
+                user_service.id_usuario = 17
+                inactive = await create_withdrawal(
+                    client, key=f"sim-inactive-{uuid4()}", amount=amount
+                )
+                results.check(
+                    "inactive user",
+                    inactive.status_code == 422
+                    and inactive.json().get("code") == "USER_INACTIVE"
+                    and await list_total(client) == total_before_failure,
+                    f"HTTP {inactive.status_code} "
+                    f"code={inactive.json().get('code')}",
+                )
+
+                # Unknown wallet user: user 99 does not exist.
+                user_service.id_usuario = 99
+                unknown = await create_withdrawal(
+                    client, key=f"sim-unknown-{uuid4()}", amount=amount
+                )
+                results.check(
+                    "unknown user",
+                    unknown.status_code == 404
+                    and unknown.json().get("code") == "USER_NOT_FOUND"
+                    and await list_total(client) == total_before_failure,
+                    f"HTTP {unknown.status_code} "
+                    f"code={unknown.json().get('code')}",
+                )
 
             # Wallet outage: no local withdrawal is committed.
             user_service.id_usuario = id_usuario
@@ -378,6 +436,17 @@ async def run(mode: str, amount: str, id_usuario: int) -> int:
                 and second.json().get("code") == "WALLET_ALREADY_REVERSED",
                 f"HTTP {second.status_code} code={second.json().get('code')}",
             )
+
+            if mode == "simulate":
+                history = await wallet_client.get_movements(before.id)
+                history_ids = {str(movement.id) for movement in history}
+                results.check(
+                    "wallet history",
+                    str(wallet_movement_id) in history_ids
+                    and str(reversed_body.get("wallet_reversal_movement_id"))
+                    in history_ids,
+                    f"{len(history)} movements include the debit and the reversal",
+                )
     finally:
         # Safety net for the live wallet: never leave a debited balance behind.
         if wallet_movement_id is not None and not reversed_ok:

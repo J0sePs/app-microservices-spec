@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID, uuid4
 
+import jwt
 from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -19,7 +20,19 @@ app = FastAPI(
     description="Local stubs for user-service, transaction-service, and wallet.",
 )
 
+JWT_SECRET = "dev-only-change-me"
+JWT_ISSUER = "billetera-dev"
+WALLET_SUBJECT = "retiros"
+USERS_SUBJECT = "billetera-service"
+
 _transactions: dict[tuple[str, str], dict[str, object]] = {}
+
+SEED_USERS: dict[int, bool] = {
+    15: True,
+    16: True,
+    17: False,
+    18: True,
+}
 
 SEED_WALLETS: dict[int, dict[str, Any]] = {
     15: {
@@ -87,6 +100,25 @@ def _problem(status: int, title: str, detail: str, instance: str) -> JSONRespons
     )
 
 
+def _require_token(authorization: str | None, subject: str) -> None:
+    """Mirror the wallet's HS256 service-token check."""
+
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Falta el token")
+    token = authorization.split(" ", 1)[1].strip()
+    try:
+        claims = jwt.decode(
+            token,
+            JWT_SECRET,
+            algorithms=["HS256"],
+            issuer=JWT_ISSUER,
+        )
+    except jwt.PyJWTError as error:
+        raise HTTPException(status_code=401, detail="Token invalido") from error
+    if claims.get("sub") != subject:
+        raise HTTPException(status_code=401, detail="Sujeto invalido")
+
+
 def _body_hash(payload: BaseModel) -> str:
     encoded = json.dumps(payload.model_dump(), sort_keys=True).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
@@ -150,6 +182,22 @@ async def ownership(
     }
 
 
+@app.get("/usuarios/{id_usuario}")
+async def get_user(
+    id_usuario: int,
+    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+) -> Any:
+    _require_token(authorization, USERS_SUBJECT)
+    if id_usuario not in SEED_USERS:
+        return _problem(
+            404,
+            "No encontrado",
+            "El usuario no existe",
+            f"/usuarios/{id_usuario}",
+        )
+    return {"idUsuario": id_usuario, "estado": SEED_USERS[id_usuario]}
+
+
 @app.post("/api/v1/transactions", status_code=201)
 async def report_transaction(
     payload: TransactionReport,
@@ -183,7 +231,9 @@ async def report_transaction(
 @app.get("/v1/wallets")
 async def get_wallet(
     idUsuario: int = Query(..., ge=1),
+    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
 ) -> Any:
+    _require_token(authorization, WALLET_SUBJECT)
     wallet = _wallets.get(idUsuario)
     if wallet is None:
         return _problem(
@@ -196,7 +246,11 @@ async def get_wallet(
 
 
 @app.get("/v1/wallets/{wallet_id}/movements")
-async def list_movements(wallet_id: str) -> dict[str, object]:
+async def list_movements(
+    wallet_id: str,
+    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+) -> dict[str, object]:
+    _require_token(authorization, WALLET_SUBJECT)
     items = [
         movement
         for movement in _movements.values()
@@ -213,7 +267,9 @@ async def create_payment(
     idempotency_key: Annotated[
         str | None, Header(alias="Idempotency-Key")
     ] = None,
+    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
 ) -> Any:
+    _require_token(authorization, WALLET_SUBJECT)
     if not idempotency_key:
         return _problem(
             400, "Solicitud invalida", "El encabezado Idempotency-Key es obligatorio",
@@ -289,7 +345,9 @@ async def reverse_movement(
     idempotency_key: Annotated[
         str | None, Header(alias="Idempotency-Key")
     ] = None,
+    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
 ) -> Any:
+    _require_token(authorization, WALLET_SUBJECT)
     if not idempotency_key:
         return _problem(
             400, "Solicitud invalida", "El encabezado Idempotency-Key es obligatorio",

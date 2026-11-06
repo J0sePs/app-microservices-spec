@@ -65,18 +65,26 @@ RDS is private and is not reachable from the public internet.
 
 ## HTTP contract
 
-Every request requires the gateway-injected `X-User-Id` header (a UUID). Every
-mutating request also requires `Idempotency-Key`.
+Every business request requires `Authorization: Bearer <jwt>` (HS256, issuer
+`billetera-dev`, subject `retiros`) and the end-user `X-User-Id` header (a
+UUID). Every mutating request also requires `Idempotency-Key`. `/health`,
+`/docs`, `/openapi.json`, and `/` are public.
 
 | Method | Path | Headers | Success |
 | --- | --- | --- | --- |
-| `POST` | `/api/v1/withdrawals` | `X-User-Id`, `Idempotency-Key` | `201` created; `200` on idempotent replay |
-| `GET` | `/api/v1/withdrawals` | `X-User-Id` | `200` paginated list |
-| `GET` | `/api/v1/withdrawals/{id}` | `X-User-Id` | `200` owned operation |
-| `POST` | `/api/v1/withdrawals/{id}/cancel` | `X-User-Id`, `Idempotency-Key` | `200` rejected operation |
-| `POST` | `/api/v1/withdrawals/{id}/reverse` | `X-User-Id`, `Idempotency-Key`, reason JSON | `200` reversed operation |
-| `POST` | `/api/v1/withdrawals/{id}/report` | `X-User-Id`, `Idempotency-Key` | `200` completed; `202` reporting still pending |
+| `POST` | `/api/v1/withdrawals` | `Authorization`, `X-User-Id`, `Idempotency-Key` | `201` created; `200` on idempotent replay |
+| `GET` | `/api/v1/withdrawals` | `Authorization`, `X-User-Id` | `200` paginated list |
+| `GET` | `/api/v1/withdrawals/{id}` | `Authorization`, `X-User-Id` | `200` owned operation |
+| `POST` | `/api/v1/withdrawals/{id}/cancel` | `Authorization`, `X-User-Id`, `Idempotency-Key` | `200` rejected operation |
+| `POST` | `/api/v1/withdrawals/{id}/reverse` | `Authorization`, `X-User-Id`, `Idempotency-Key`, reason JSON | `200` reversed operation |
+| `POST` | `/api/v1/withdrawals/{id}/report` | `Authorization`, `X-User-Id`, `Idempotency-Key` | `200` completed; `202` reporting still pending |
 | `GET` | `/health` | none | `200` ready; `503` database unavailable |
+
+A missing, expired, wrong-issuer, or wrong-subject token returns `401` with
+`WWW-Authenticate: Bearer`. A valid token without `X-User-Id` also returns `401`.
+Before a debit or reversal, the service validates the wallet owner with
+`GET /usuarios/{idUsuario}` and maps `404` to `USER_NOT_FOUND`, an inactive
+`estado` to `USER_INACTIVE`, and an unavailable service to `503`.
 
 Errors use the envelope:
 
@@ -95,7 +103,10 @@ Errors use the envelope:
 ### Example
 
 ```bash
+TOKEN=$(.venv/bin/python -c "from withdrawal_soles.infrastructure.service_jwt import sign_service_token; print(sign_service_token(secret='dev-only-change-me', issuer='billetera-dev', subject='retiros', ttl_seconds=3600))")
+
 curl -i -X POST http://localhost:8080/api/v1/withdrawals \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -H "X-User-Id: 9d1e2f3a-4b5c-6d7e-8f90-1a2b3c4d5e6f" \
   -H "Idempotency-Key: demo-1" \

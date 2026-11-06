@@ -1,12 +1,10 @@
 """HTTP adapter for the PEN wallet balance owner."""
 
-import time
 from datetime import datetime
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import httpx
-import jwt
 
 from withdrawal_soles.core.settings import Settings
 from withdrawal_soles.domain.exceptions import (
@@ -21,6 +19,7 @@ from withdrawal_soles.domain.exceptions import (
 )
 from withdrawal_soles.domain.models import WalletBalance, WalletMovement
 from withdrawal_soles.infrastructure.http_retry import request_with_retries
+from withdrawal_soles.infrastructure.service_jwt import sign_service_token
 
 
 class WalletServiceClient:
@@ -38,18 +37,11 @@ class WalletServiceClient:
         )
 
     def _token(self) -> str:
-        issued_at = int(time.time())
-        claims = {
-            "sub": self._settings.wallet_jwt_subject,
-            "iss": self._settings.wallet_jwt_issuer,
-            "iat": issued_at,
-            "exp": issued_at + self._settings.wallet_jwt_ttl_seconds,
-            "jti": str(uuid4()),
-        }
-        return jwt.encode(
-            claims,
-            self._settings.wallet_jwt_secret,
-            algorithm="HS256",
+        return sign_service_token(
+            secret=self._settings.wallet_jwt_secret,
+            issuer=self._settings.wallet_jwt_issuer,
+            subject=self._settings.wallet_jwt_subject,
+            ttl_seconds=self._settings.wallet_jwt_ttl_seconds,
         )
 
     def _headers(self, idempotency_key: str | None = None) -> dict[str, str]:
@@ -103,6 +95,27 @@ class WalletServiceClient:
         except (KeyError, TypeError, ValueError) as error:
             raise DependencyUnavailable(
                 "billetera", "The wallet returned an invalid wallet payload."
+            ) from error
+
+    async def get_movements(self, wallet_id: UUID) -> list[WalletMovement]:
+        response = await self._request("GET", f"/v1/wallets/{wallet_id}/movements")
+        self._raise_for_wallet_error(response)
+        if response.status_code != 200:
+            raise DependencyUnavailable(
+                "billetera",
+                f"The wallet returned HTTP {response.status_code} for the movements.",
+            )
+        try:
+            payload = response.json()
+            items = payload.get("items") if isinstance(payload, dict) else payload
+            if not isinstance(items, list) or not all(
+                isinstance(item, dict) for item in items
+            ):
+                raise TypeError("movements is not a list of objects")
+            return [_movement_from_dict(item) for item in items]
+        except (KeyError, TypeError, ValueError) as error:
+            raise DependencyUnavailable(
+                "billetera", "The wallet returned an invalid movements payload."
             ) from error
 
     async def debit(
@@ -212,22 +225,25 @@ def _parse_datetime(value: Any) -> datetime | None:
 
 def _parse_movement(response: httpx.Response) -> WalletMovement:
     try:
-        payload = response.json()
-        return WalletMovement(
-            id=UUID(str(payload["id"])),
-            wallet_id=UUID(str(payload["walletId"])),
-            amount=int(payload["amount"]),
-            currency=str(payload["currency"]),
-            direction=str(payload["direction"]),
-            type=str(payload["type"]),
-            external_reference=_optional_str(payload.get("externalReference")),
-            reversal_of=_optional_uuid(payload.get("reversalOf")),
-            created_at=_parse_datetime(payload.get("createdAt")),
-        )
+        return _movement_from_dict(response.json())
     except (KeyError, TypeError, ValueError) as error:
         raise DependencyUnavailable(
             "billetera", "The wallet returned an invalid payment payload."
         ) from error
+
+
+def _movement_from_dict(payload: dict[str, Any]) -> WalletMovement:
+    return WalletMovement(
+        id=UUID(str(payload["id"])),
+        wallet_id=UUID(str(payload["walletId"])),
+        amount=int(payload["amount"]),
+        currency=str(payload["currency"]),
+        direction=str(payload["direction"]),
+        type=str(payload["type"]),
+        external_reference=_optional_str(payload.get("externalReference")),
+        reversal_of=_optional_uuid(payload.get("reversalOf")),
+        created_at=_parse_datetime(payload.get("createdAt")),
+    )
 
 
 def _parse_reversal(response: httpx.Response) -> WalletMovement:

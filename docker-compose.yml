@@ -42,7 +42,7 @@ services:
       disable: true
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.mock-dependencies.rule=PathPrefix(`/api/v1/accounts`) || PathPrefix(`/api/v1/transactions`) || PathPrefix(`/v1/`)"
+      - "traefik.http.routers.mock-dependencies.rule=PathPrefix(`/api/v1/accounts`) || PathPrefix(`/usuarios`) || PathPrefix(`/api/v1/transactions`) || PathPrefix(`/v1/`)"
       - "traefik.http.routers.mock-dependencies.entrypoints=web"
       - "traefik.http.routers.mock-dependencies.service=mock-dependencies"
       - "traefik.http.services.mock-dependencies.loadbalancer.server.port=8001"

@@ -30,7 +30,8 @@ Este repositorio corresponde exclusivamente al microservicio **`withdrawal-soles
 - Database per service: ningún microservicio accede a la DB de otro.
 - Comunicación entre servicios: siempre HTTP vía API Gateway.
 - Idempotencia obligatoria en operaciones mutativas (`Idempotency-Key` header).
-- Autenticación delegada al API Gateway (JWT); el servicio recibe `X-User-Id`.
+- Autenticación delegada al API Gateway (JWT); el servicio valida el JWT de
+  servicio y recibe `X-User-Id` como identidad del usuario final.
 
 ### Git Workflow
 - Rama principal: `main` protegida con PR obligatorio y 1 aprobación.

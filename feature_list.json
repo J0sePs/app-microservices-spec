@@ -187,6 +187,34 @@
         "./init.sh: VERIFICATION PASSED, 5/5 harness subsystems and 16/16 checks"
       ],
       "notes": "The wallet is the sole balance owner. Archived as 2026-11-06-integrate-pen-wallet-debit. Live simulation is safe to rerun because it reverses the S/ 10.00 debit and restores the seeded balance."
+    },
+    {
+      "id": "security-001",
+      "priority": 6,
+      "area": "withdrawal-soles",
+      "title": "Service JWT and users-service contract are enforced",
+      "user_visible_behavior": "Every business call requires a valid service JWT plus X-User-Id, and a debit or reversal validates the wallet owner against GET /usuarios/{idUsuario} before touching the balance.",
+      "status": "passing",
+      "change": "secure-api-jwt-users-contract",
+      "verification": [
+        "Run make verify and confirm the auth, users-contract, API, and wallet suites pass.",
+        "Send a request without Authorization and confirm 401 UNAUTHORIZED; send a valid token without X-User-Id and confirm 401.",
+        "Run scripts/simulate_wallet_integration.py --mode simulate and confirm every check passes.",
+        "Start the compose stack and run scripts/wallet_contract_check.py against it.",
+        "Regenerate openapi.yaml, run openspec validate --all --strict, and run ./init.sh."
+      ],
+      "evidence": [
+        "make verify: ruff All checks passed; pytest 106 passed",
+        "Auth checks: POST without Authorization returns 401 UNAUTHORIZED with WWW-Authenticate: Bearer; a valid token without X-User-Id returns 401; wrong secret, issuer, subject, or expired tokens return 401",
+        "scripts/simulate_wallet_integration.py --mode simulate: 15/15 checks passed, including JWT-authenticated wallet calls, USER_NOT_FOUND, USER_INACTIVE, missing wallet, wallet outage, report failure, reversal, and wallet history",
+        "scripts/simulate_wallet_integration.py --mode live: 9/9 checks passed; debit movement d95ea219-04e0-4b11-b60b-d57724f00501; wallet 15 balance 50000 -> 49000 -> 50000 cents after reversal",
+        "docker compose up -d --build: db healthy, withdrawal-soles healthy, mock and Traefik running; Traefik routes /usuarios to the mock",
+        "scripts/wallet_contract_check.py --base-url http://localhost:8080 --wallet-url http://localhost:8080: 11/11 checks passed; debit movement c8e8ca76-0eb5-4531-9375-75df0ef7f862; balance 25000 -> 24000 -> 25000 cents",
+        "make openapi: BearerAuth security scheme, 6 protected operations, and the users-contract description",
+        "openspec validate --all --strict: 8 passed, 0 failed",
+        "./init.sh: VERIFICATION PASSED, 5/5 harness subsystems and 16/16 checks"
+      ],
+      "notes": "Implements PARA-INTEGRAR-RETIROS-3.md for the withdrawal side: JWT-only inbound authentication and the published users contract. Archived as 2026-11-06-secure-api-jwt-users-contract."
     }
   ]
 }

@@ -11,6 +11,7 @@ from withdrawal_soles.domain.models import (
     IdempotencyRecord,
     ReportingAttempt,
     StatusChange,
+    UserIdentity,
     WalletBalance,
     WalletMovement,
     Withdrawal,
@@ -58,11 +59,13 @@ class WithdrawalRepository(Protocol):
 
 
 class UserServicePort(Protocol):
-    """Ownership validation exposed by user-service."""
+    """Ownership validation and wallet-owner status exposed by user-service."""
 
     async def get_ownership(
         self, account_id: UUID, user_id: UUID
     ) -> AccountOwnership: ...
+
+    async def get_user(self, id_usuario: int) -> UserIdentity: ...
 
 
 class TransactionServicePort(Protocol):

@@ -8,6 +8,10 @@ layout and owns `withdrawal_soles_db`.
 - Create PEN withdrawals with `S/ 10.00` minimum, `S/ 5,000.00` maximum, and a
   `S/ 10,000.00` daily accumulated limit per account.
 - Validate account ownership, currency, and status through `user-service`.
+- Require a service JWT on every business route and `X-User-Id` for the
+  end-user identity.
+- Validate the wallet owner through `GET /usuarios/{idUsuario}` before a debit
+  or a reversal.
 - Debit the external PEN wallet, which is the sole owner of the balance, and
   persist the wallet and movement identifiers.
 - Reverse the full wallet debit through a compensating movement.
@@ -50,6 +54,7 @@ Settings use the `WITHDRAWAL_SOLES_` prefix. See `.env.example`.
 | --- | --- | --- |
 | `WITHDRAWAL_SOLES_DATABASE_URL` | `postgresql+asyncpg://withdrawal:withdrawal@localhost:5432/withdrawal_soles_db` | Owned database |
 | `WITHDRAWAL_SOLES_USER_SERVICE_URL` | `http://localhost:8080` | Gateway base URL for user-service |
+| `WITHDRAWAL_SOLES_USERS_SERVICE_URL` | empty (falls back to user service URL) | Base URL for `GET /usuarios/{idUsuario}` |
 | `WITHDRAWAL_SOLES_TRANSACTION_SERVICE_URL` | `http://localhost:8080` | Gateway base URL for transaction-service |
 | `WITHDRAWAL_SOLES_WALLET_SERVICE_URL` | `http://18.228.136.200` | Published PEN wallet base URL |
 | `WITHDRAWAL_SOLES_BUSINESS_TIMEZONE` | `America/Lima` | Daily limit window |
@@ -59,6 +64,21 @@ Settings use the `WITHDRAWAL_SOLES_` prefix. See `.env.example`.
 | `WITHDRAWAL_SOLES_WALLET_JWT_ISSUER` | `billetera-dev` | Wallet token issuer |
 | `WITHDRAWAL_SOLES_WALLET_JWT_SUBJECT` | `retiros` | Wallet token subject |
 | `WITHDRAWAL_SOLES_WALLET_JWT_TTL_SECONDS` | `60` | Wallet token lifetime |
+| `WITHDRAWAL_SOLES_USERS_JWT_SECRET` | `dev-only-change-me` | HS256 users token secret (dev only) |
+| `WITHDRAWAL_SOLES_USERS_JWT_ISSUER` | `billetera-dev` | Users token issuer |
+| `WITHDRAWAL_SOLES_USERS_JWT_SUBJECT` | `billetera-service` | Users token subject |
+| `WITHDRAWAL_SOLES_USERS_JWT_TTL_SECONDS` | `60` | Users token lifetime |
+| `WITHDRAWAL_SOLES_USERS_SERVICE_TIMEOUT_SECONDS` | `2.0` | Users contract budget |
+| `WITHDRAWAL_SOLES_AUTH_JWT_SECRET` | `dev-only-change-me` | Inbound service token secret (dev only) |
+| `WITHDRAWAL_SOLES_AUTH_JWT_ISSUER` | `billetera-dev` | Inbound token issuer |
+| `WITHDRAWAL_SOLES_AUTH_JWT_ALGORITHMS` | `HS256` | Allowed inbound algorithms |
+| `WITHDRAWAL_SOLES_AUTH_JWT_ALLOWED_SUBJECTS` | `retiros` | Allowed inbound subjects |
+
+Generate a development token for manual calls:
+
+```bash
+.venv/bin/python -c "from withdrawal_soles.infrastructure.service_jwt import sign_service_token; print(sign_service_token(secret='dev-only-change-me', issuer='billetera-dev', subject='retiros', ttl_seconds=3600))"
+```
 
 ## Database migrations
 
@@ -90,8 +110,16 @@ The gateway is at `http://localhost:8080`; the Traefik dashboard is at
 
 ## API examples
 
+Every business route requires `Authorization: Bearer <jwt>` and `X-User-Id`.
+Export a development token first:
+
+```bash
+TOKEN=$(.venv/bin/python -c "from withdrawal_soles.infrastructure.service_jwt import sign_service_token; print(sign_service_token(secret='dev-only-change-me', issuer='billetera-dev', subject='retiros', ttl_seconds=3600))")
+```
+
 ```bash
 curl -i -X POST http://localhost:8080/api/v1/withdrawals \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -H "X-User-Id: 9d1e2f3a-4b5c-6d7e-8f90-1a2b3c4d5e6f" \
   -H "Idempotency-Key: demo-1" \
@@ -100,27 +128,37 @@ curl -i -X POST http://localhost:8080/api/v1/withdrawals \
 
 ```bash
 curl http://localhost:8080/api/v1/withdrawals/<id> \
+  -H "Authorization: Bearer $TOKEN" \
   -H "X-User-Id: 9d1e2f3a-4b5c-6d7e-8f90-1a2b3c4d5e6f"
 ```
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/withdrawals/<id>/cancel \
+  -H "Authorization: Bearer $TOKEN" \
   -H "X-User-Id: 9d1e2f3a-4b5c-6d7e-8f90-1a2b3c4d5e6f" \
   -H "Idempotency-Key: cancel-1"
 ```
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/withdrawals/<id>/report \
+  -H "Authorization: Bearer $TOKEN" \
   -H "X-User-Id: 9d1e2f3a-4b5c-6d7e-8f90-1a2b3c4d5e6f" \
   -H "Idempotency-Key: report-1"
 ```
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/withdrawals/<id>/reverse \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -H "X-User-Id: 9d1e2f3a-4b5c-6d7e-8f90-1a2b3c4d5e6f" \
   -H "Idempotency-Key: reverse-1" \
   -d '{"reason":"Reversal requested by the operations team"}'
+```
+
+Run the HTTP-only contract check against a running stack:
+
+```bash
+.venv/bin/python scripts/wallet_contract_check.py --base-url http://localhost:8080 --wallet-url http://localhost:8080
 ```
 
 ### OpenAPI contract
@@ -159,8 +197,9 @@ Common codes: `UNAUTHORIZED`, `MISSING_IDEMPOTENCY_KEY`, `INVALID_AMOUNT`,
 `DAILY_LIMIT_EXCEEDED`, `ACCOUNT_NOT_OWNED`, `ACCOUNT_NOT_FOUND`,
 `ACCOUNT_NOT_ELIGIBLE`, `IDEMPOTENCY_CONFLICT`, `IDEMPOTENCY_IN_PROGRESS`,
 `WITHDRAWAL_NOT_FOUND`, `INVALID_STATE`, `DEPENDENCY_UNAVAILABLE`,
-`REPORTING_FAILED`, `WALLET_NOT_FOUND`, `INSUFFICIENT_BALANCE`, `USER_INACTIVE`,
-`WALLET_CONFLICT`, `WALLET_AUTH_FAILED`, and `WALLET_ALREADY_REVERSED`.
+`REPORTING_FAILED`, `USER_NOT_FOUND`, `WALLET_NOT_FOUND`,
+`INSUFFICIENT_BALANCE`, `USER_INACTIVE`, `WALLET_CONFLICT`,
+`WALLET_AUTH_FAILED`, and `WALLET_ALREADY_REVERSED`.
 
 ## Architecture references
 

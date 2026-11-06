@@ -118,6 +118,16 @@ class ReportingError(DomainError):
         super().__init__("REPORTING_FAILED", message, 502, details)
 
 
+class UserNotFound(DomainError):
+    def __init__(self) -> None:
+        super().__init__("USER_NOT_FOUND", "El usuario no existe.", 404)
+
+
+class UserInactive(DomainError):
+    def __init__(self) -> None:
+        super().__init__("USER_INACTIVE", "El usuario no está activo.", 422)
+
+
 class WalletNotFound(DomainError):
     def __init__(self) -> None:
         super().__init__("WALLET_NOT_FOUND", "The wallet was not found.", 404)

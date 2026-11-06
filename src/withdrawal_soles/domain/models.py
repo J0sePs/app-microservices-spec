@@ -98,6 +98,14 @@ class AccountOwnership:
 
 
 @dataclass(frozen=True, slots=True)
+class UserIdentity:
+    """Wallet owner status returned by the users contract."""
+
+    id_usuario: int
+    active: bool
+
+
+@dataclass(frozen=True, slots=True)
 class WalletBalance:
     """Wallet state returned by the wallet service."""
 

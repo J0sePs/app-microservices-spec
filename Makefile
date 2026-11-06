@@ -1,4 +1,4 @@
-.PHONY: install lint test fmt run migrate verify openapi
+.PHONY: install lint test fmt run migrate verify openapi simulate contract-check
 
 PYTHON ?= .venv/bin/python
 PIP ?= .venv/bin/pip
@@ -6,6 +6,7 @@ PYTEST ?= .venv/bin/pytest
 RUFF ?= .venv/bin/ruff
 UVICORN ?= .venv/bin/uvicorn
 ALEMBIC ?= .venv/bin/alembic
+BASE_URL ?= http://localhost:8080
 
 install:
 	test -d .venv || python3 -m venv .venv
@@ -31,3 +32,9 @@ verify: lint test
 
 openapi:
 	$(PYTHON) scripts/export_openapi.py
+
+simulate:
+	$(PYTHON) scripts/simulate_wallet_integration.py --mode simulate
+
+contract-check:
+	$(PYTHON) scripts/wallet_contract_check.py --base-url $(BASE_URL)

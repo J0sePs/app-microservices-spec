@@ -15,6 +15,7 @@ from tests.conftest import (
     FixedClock,
     headers,
     payload,
+    service_token,
 )
 from withdrawal_soles.core.settings import Settings
 from withdrawal_soles.domain.enums import WithdrawalStatus
@@ -59,11 +60,54 @@ async def test_missing_identity_returns_401(client) -> None:
     assert response.json()["code"] == "UNAUTHORIZED"
 
 
+async def test_missing_token_returns_401(client) -> None:
+    response = await client.post(
+        "/api/v1/withdrawals",
+        json=payload(),
+        headers={
+            "X-User-Id": str(USER_ID),
+            "Idempotency-Key": "missing-token",
+        },
+    )
+    assert response.status_code == 401
+    assert response.json()["code"] == "UNAUTHORIZED"
+    assert response.headers["www-authenticate"] == "Bearer"
+
+
+async def test_missing_user_with_valid_token_returns_401(client) -> None:
+    response = await client.get(
+        "/api/v1/withdrawals",
+        headers={"Authorization": f"Bearer {service_token()}"},
+    )
+    assert response.status_code == 401
+    assert response.json()["code"] == "UNAUTHORIZED"
+
+
+@pytest.mark.parametrize(
+    "token",
+    [
+        service_token(secret="wrong-secret"),
+        service_token(issuer="other-issuer"),
+        service_token(subject="billetera-service"),
+        service_token(expires_in=-60),
+    ],
+)
+async def test_invalid_token_returns_401(client, token: str) -> None:
+    response = await client.get(
+        "/api/v1/withdrawals", headers=headers(token=token)
+    )
+    assert response.status_code == 401
+    assert response.json()["code"] == "UNAUTHORIZED"
+
+
 async def test_missing_idempotency_returns_422(client) -> None:
     response = await client.post(
         "/api/v1/withdrawals",
         json=payload(),
-        headers={"X-User-Id": str(USER_ID)},
+        headers={
+            "Authorization": f"Bearer {service_token()}",
+            "X-User-Id": str(USER_ID),
+        },
     )
     assert response.status_code == 422
     assert response.json()["code"] == "MISSING_IDEMPOTENCY_KEY"
@@ -293,11 +337,57 @@ async def test_insufficient_balance_creates_no_withdrawal(
 async def test_missing_wallet_returns_404_and_no_withdrawal(
     client, user_service
 ) -> None:
-    user_service.set_account(id_usuario=17)
+    user_service.set_account(id_usuario=19)
     response = await create(client, key="wallet-missing", amount="10.00")
 
     assert response.status_code == 404
     assert response.json()["code"] == "WALLET_NOT_FOUND"
+    listing = await client.get("/api/v1/withdrawals", headers=headers())
+    assert listing.json()["total"] == 0
+
+
+async def test_inactive_wallet_user_returns_422_and_no_withdrawal(
+    client, user_service, wallet_service
+) -> None:
+    from withdrawal_soles.domain.exceptions import UserInactive
+
+    user_service.user_error = UserInactive()
+    response = await create(client, key="user-inactive", amount="10.00")
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "USER_INACTIVE"
+    assert wallet_service.get_calls == 0
+    assert wallet_service.debit_calls == 0
+    listing = await client.get("/api/v1/withdrawals", headers=headers())
+    assert listing.json()["total"] == 0
+
+
+async def test_unknown_wallet_user_returns_404_and_no_withdrawal(
+    client, user_service, wallet_service
+) -> None:
+    from withdrawal_soles.domain.exceptions import UserNotFound
+
+    user_service.user_error = UserNotFound()
+    response = await create(client, key="user-missing", amount="10.00")
+
+    assert response.status_code == 404
+    assert response.json()["code"] == "USER_NOT_FOUND"
+    assert wallet_service.debit_calls == 0
+    listing = await client.get("/api/v1/withdrawals", headers=headers())
+    assert listing.json()["total"] == 0
+
+
+async def test_users_unavailable_returns_503_and_no_withdrawal(
+    client, user_service, wallet_service
+) -> None:
+    from withdrawal_soles.domain.exceptions import DependencyUnavailable
+
+    user_service.user_error = DependencyUnavailable("users-service")
+    response = await create(client, key="users-down", amount="10.00")
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "DEPENDENCY_UNAVAILABLE"
+    assert wallet_service.debit_calls == 0
     listing = await client.get("/api/v1/withdrawals", headers=headers())
     assert listing.json()["total"] == 0
 

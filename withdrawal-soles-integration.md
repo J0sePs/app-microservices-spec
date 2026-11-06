@@ -59,9 +59,15 @@ monto como string.
 Todas las rutas de negocio llevan:
 
 ```http
+Authorization: Bearer <jwt>
 X-User-Id: <uuid-del-usuario>
 Content-Type: application/json
 ```
+
+El JWT es el token de servicio acordado: HS256, emisor `billetera-dev`, sujeto
+`retiros` y secreto `dev-only-change-me` (solo desarrollo). Sin token válido el
+servicio responde `401 UNAUTHORIZED`; `X-User-Id` no reemplaza ese token. El
+token autentica al llamador y `X-User-Id` identifica al usuario final.
 
 Las operaciones mutativas llevan además:
 
@@ -72,9 +78,14 @@ Idempotency-Key: <uuid-único-por-intento>
 `X-User-Id` debe ser un UUID. Si falta o no es válido, el servicio responde
 `401 UNAUTHORIZED`.
 
-En el despliegue actual el gateway **no valida JWT**; el servicio confía en el
-header `X-User-Id`. Para producción, el gateway debe validar el JWT y generar
-ese header. No uses el endpoint público de práctica con datos reales.
+Para generar un token de desarrollo:
+
+```bash
+.venv/bin/python -c "from withdrawal_soles.infrastructure.service_jwt import sign_service_token; print(sign_service_token(secret='dev-only-change-me', issuer='billetera-dev', subject='retiros', ttl_seconds=3600))"
+```
+
+En producción, inyecta un secreto fuerte por variable de entorno y no publiques
+el token de desarrollo.
 
 ### Idempotencia
 
@@ -96,17 +107,19 @@ ese header. No uses el endpoint público de práctica con datos reales.
    - debe estar `ACTIVE`;
    - debe incluir el entero `id_usuario` de la billetera.
 4. Retiros verifica el límite diario acumulado de la cuenta.
-5. Retiros consulta la billetera por `idUsuario` y debita el monto exacto en
+5. Retiros confirma con `GET /usuarios/{idUsuario}` que el usuario existe y
+   tiene `estado: true`.
+6. Retiros consulta la billetera por `idUsuario` y debita el monto exacto en
    céntimos con `externalReference` igual al UUID del retiro.
-6. Persiste la operación con `wallet_id`, `wallet_movement_id` y timestamps.
-7. Reporta la operación a `transaction-service` y responde:
+7. Persiste la operación con `wallet_id`, `wallet_movement_id` y timestamps.
+8. Reporta la operación a `transaction-service` y responde:
    - `COMPLETED` si el reporte transaccional funcionó;
    - `APPROVED` si el retiro quedó aprobado pero el reporte falló. En ese caso
      se puede reintentar con `POST /{id}/report`.
 
-Si la billetera rechaza el débito, no se crea ningún retiro. Un fallo de
-reporte posterior no revierte el débito: la operación queda `APPROVED` y se
-puede reintentar el reporte.
+Si usuarios o la billetera rechazan la operación, no se crea ningún retiro. Un
+fallo de reporte posterior no revierte el débito: la operación queda `APPROVED`
+y se puede reintentar el reporte.
 
 ## Endpoints
 
@@ -114,6 +127,7 @@ puede reintentar el reporte.
 
 ```http
 POST /api/v1/withdrawals
+Authorization: Bearer <jwt>
 X-User-Id: 9d1e2f3a-4b5c-6d7e-8f90-1a2b3c4d5e6f
 Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000
 Content-Type: application/json
@@ -157,7 +171,10 @@ la misma operación.
 Ejemplo con curl:
 
 ```bash
+TOKEN=$(.venv/bin/python -c "from withdrawal_soles.infrastructure.service_jwt import sign_service_token; print(sign_service_token(secret='dev-only-change-me', issuer='billetera-dev', subject='retiros', ttl_seconds=3600))")
+
 curl -sS -X POST "http://a6c1a4b5ffa8a44808f8a8a0784fe0d7-266125410.us-east-1.elb.amazonaws.com/api/v1/withdrawals" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "X-User-Id: 9d1e2f3a-4b5c-6d7e-8f90-1a2b3c4d5e6f" \
   -H "Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000" \
   -H "Content-Type: application/json" \
@@ -168,6 +185,7 @@ curl -sS -X POST "http://a6c1a4b5ffa8a44808f8a8a0784fe0d7-266125410.us-east-1.el
 
 ```http
 GET /api/v1/withdrawals?account_id=<uuid>&status=COMPLETED&limit=20&offset=0
+Authorization: Bearer <jwt>
 X-User-Id: <uuid>
 ```
 
@@ -208,6 +226,7 @@ Solo se devuelven operaciones del `X-User-Id` que consulta.
 
 ```http
 GET /api/v1/withdrawals/{withdrawal_id}
+Authorization: Bearer <jwt>
 X-User-Id: <uuid>
 ```
 
@@ -218,6 +237,7 @@ usuario, responde `404 WITHDRAWAL_NOT_FOUND`.
 
 ```http
 POST /api/v1/withdrawals/{withdrawal_id}/cancel
+Authorization: Bearer <jwt>
 X-User-Id: <uuid>
 Idempotency-Key: <uuid>
 ```
@@ -234,6 +254,7 @@ creadas por un flujo futuro o manual.
 
 ```http
 POST /api/v1/withdrawals/{withdrawal_id}/reverse
+Authorization: Bearer <jwt>
 X-User-Id: <uuid>
 Idempotency-Key: <uuid>
 Content-Type: application/json
@@ -256,6 +277,7 @@ compensatorio y marca la operación como `REVERSED`. Solo aplica a operaciones
 
 ```http
 POST /api/v1/withdrawals/{withdrawal_id}/report
+Authorization: Bearer <jwt>
 X-User-Id: <uuid>
 Idempotency-Key: <uuid>
 ```
@@ -293,7 +315,7 @@ Todas las rutas devuelven el mismo envelope:
 
 | Código HTTP | `code` | Cuándo |
 | --- | --- | --- |
-| 401 | `UNAUTHORIZED` | Falta `X-User-Id` o no es un UUID válido |
+| 401 | `UNAUTHORIZED` | Falta el JWT, es inválido, o falta `X-User-Id` |
 | 403 | `ACCOUNT_NOT_OWNED` | La cuenta no pertenece al usuario |
 | 404 | `ACCOUNT_NOT_FOUND` | `user-service` no encontró la cuenta |
 | 404 | `WITHDRAWAL_NOT_FOUND` | El retiro no existe o no pertenece al usuario |
@@ -308,6 +330,7 @@ Todas las rutas devuelven el mismo envelope:
 | 422 | `USER_INACTIVE` | El usuario de la billetera está inactivo |
 | 422 | `WALLET_ALREADY_REVERSED` | El retiro ya fue revertido |
 | 422 | `VALIDATION_ERROR` | Cuerpo o parámetros no cumplen el contrato |
+| 404 | `USER_NOT_FOUND` | Usuarios no encontró el `idUsuario` |
 | 404 | `WALLET_NOT_FOUND` | El usuario no tiene billetera |
 | 409 | `WALLET_CONFLICT` | Conflicto de idempotencia o estado en la billetera |
 | 503 | `DEPENDENCY_UNAVAILABLE` | `user-service`, la billetera o `transaction-service` no respondió |
@@ -347,6 +370,36 @@ Retiros usa `owned`, `currency` y `status` para decidir si puede continuar.
 `currency != PEN` o `status != ACTIVE` a `ACCOUNT_NOT_ELIGIBLE`. Sin
 `id_usuario` no se llama a la billetera y se responde `503
 DEPENDENCY_UNAVAILABLE`.
+
+#### Estado del usuario para la billetera
+
+Antes de debitar o reversar, retiros llama el mismo contrato que la billetera:
+
+```http
+GET {USERS_SERVICE_URL}/usuarios/{idUsuario}
+Authorization: Bearer <jwt sub=billetera-service>
+Accept: application/json
+```
+
+Respuesta mínima:
+
+```json
+{ "idUsuario": 15, "estado": true }
+```
+
+También se acepta `id_usuario` en lugar de `idUsuario`. El id del cuerpo debe
+coincidir con el de la ruta y `estado` debe ser el booleano `true`.
+
+| Respuesta de usuarios | Respuesta de retiros |
+| --- | --- |
+| `200` y `estado: true` | Continúa con la billetera |
+| `404` o el id no coincide | `404 USER_NOT_FOUND`; no hay movimiento |
+| `200` y `estado` distinto de `true` | `422 USER_INACTIVE`; no hay movimiento |
+| Timeout de 2 segundos o cualquier otro estado | `503 DEPENDENCY_UNAVAILABLE`; no hay movimiento |
+
+`WITHDRAWAL_SOLES_USERS_SERVICE_URL` es opcional y, si está vacía, usa la misma
+base que `WITHDRAWAL_SOLES_USER_SERVICE_URL`. En el stack local el mock responde
+`/usuarios/{idUsuario}` con los usuarios 15, 16 y 18 activos y el 17 inactivo.
 
 ### `transaction-service`
 
@@ -417,8 +470,8 @@ id del movimiento compensatorio.
 - No implementa la billetera: solo consume su contrato de débito y reversión.
 - No registra banco, cajero, motivo, comisión ni comprobante.
 - No procesa retiros en USD; este servicio es solo `PEN`.
-- No valida JWT de usuario por sí mismo; confía en `X-User-Id` inyectado por el
-  gateway.
+- No emite tokens de usuario: exige el JWT de servicio acordado y toma la
+  identidad final de `X-User-Id`.
 - No permite que otro servicio lea o escriba directamente su base de datos.
 
 ## Datos que guarda
@@ -443,16 +496,22 @@ en céntimos y permite revertir el débito completo. El detalle histórico está
 
 ## Práctica local
 
-El simulador local de dependencias expone las mismas rutas de billetera. Las
-billeteras sembradas son usuario 15 = `S/ 250.00`, usuario 16 = `S/ 15.00`, y
-usuario 18 = `S/ 5,000.00`; el usuario 17 no tiene billetera.
+El simulador local de dependencias expone las mismas rutas de billetera y
+verifica el mismo JWT. Las billeteras sembradas son usuario 15 = `S/ 250.00`,
+usuario 16 = `S/ 15.00`, y usuario 18 = `S/ 5,000.00`; el usuario 17 no tiene
+billetera y está inactivo.
 
 ```bash
 docker compose up -d --build
 curl http://localhost:8080/health
 curl http://localhost:8080/docs
-.venv/bin/python scripts/simulate_wallet_integration.py --mode simulator
+.venv/bin/python scripts/simulate_wallet_integration.py --mode simulate
+.venv/bin/python scripts/wallet_contract_check.py --base-url http://localhost:8080 --wallet-url http://localhost:8080
 ```
+
+`wallet_contract_check.py` es la herramienta pensada para el compañero: solo usa
+HTTP, comprueba el `401` sin token, crea y revierte un retiro, y verifica el
+saldo si se pasa `--wallet-url`. Es seguro repetirla porque siempre revierte.
 
 La URL pública de práctica se puede recrear con:
 

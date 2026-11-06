@@ -48,7 +48,12 @@ integration agreement and its implementation notes are in
 ```bash
 make install && make verify   # Python service checks
 docker compose up --build      # PostgreSQL + Traefik + service + local stubs
+make contract-check            # HTTP JWT + debit + reversal check
 ```
+
+All business calls require `Authorization: Bearer <jwt>` and `X-User-Id`; see
+[docs/withdrawal-soles.md](docs/withdrawal-soles.md#api-examples) for the
+development token command.
 
 ## AWS infrastructure
 

@@ -64,15 +64,19 @@ def enrich(spec: dict) -> dict:
     spec["info"]["title"] = "withdrawal-soles API"
     spec["info"]["description"] = (
         "PEN withdrawal microservice for the banking platform.\n\n"
-        "Every request carries the gateway-injected `X-User-Id` header. Every "
-        "mutating request also requires an `Idempotency-Key`. Amounts are "
-        "decimal strings in PEN; the minimum is 10.00, the maximum per "
-        "operation is 5000.00, and the daily accumulated limit per account is "
-        "10000.00.\n\n"
-        "The external PEN wallet is the balance owner. A successful withdrawal "
-        "debits the wallet before it is persisted and stores the wallet and "
-        "movement identifiers; `POST /api/v1/withdrawals/{id}/reverse` returns "
-        "the full amount to the wallet."
+        "Every business request carries `Authorization: Bearer <jwt>` "
+        "(HS256, issuer `billetera-dev`, subject `retiros`) and the "
+        "`X-User-Id` header with the end-user UUID. Without the token the "
+        "service responds `401`. Every mutating request also requires an "
+        "`Idempotency-Key`. Amounts are decimal strings in PEN; the minimum is "
+        "10.00, the maximum per operation is 5000.00, and the daily "
+        "accumulated limit per account is 10000.00.\n\n"
+        "The external PEN wallet is the balance owner. Before debiting or "
+        "reversing, the service validates the wallet owner with "
+        "`GET /usuarios/{idUsuario}`. A successful withdrawal debits the wallet "
+        "before it is persisted and stores the wallet and movement identifiers; "
+        "`POST /api/v1/withdrawals/{id}/reverse` returns the full amount to the "
+        "wallet."
     )
     spec["info"]["contact"] = {
         "name": "app-nube-2",
@@ -120,7 +124,9 @@ def enrich(spec: dict) -> dict:
                 if parameter["name"] == "X-User-Id":
                     parameter["required"] = True
                     parameter["description"] = (
-                        "Caller identity injected by the API gateway. Must be a UUID."
+                        "End-user identity as a UUID. Required in addition to "
+                        "the service bearer token; the token authenticates the "
+                        "caller, not the customer."
                     )
                     parameter["schema"] = {"type": "string", "format": "uuid"}
                 elif parameter["name"] == "Idempotency-Key":
