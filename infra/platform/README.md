@@ -51,8 +51,9 @@ terraform output application_namespace
 The gateway URL is the Traefik LoadBalancer. The application is reachable at
 `/docs`, `/health`, and `/api/v1/withdrawals`; the mock is reachable only through
 the gateway paths `/api/v1/accounts`, `/api/v1/transactions`, `/usuarios`, and
-`/v1/` (wallet). The deployment points the user, transaction, and wallet
-service URLs at the in-cluster Traefik service, so the demo is self-contained.
+`/v1/` (wallet). The deployment points the user and transaction service URLs at
+the in-cluster Traefik service, and the wallet URL at `var.wallet_service_url`
+(default `http://52.67.162.209`, the published Billetera Digital PEN API).
 
 ## Apply order
 

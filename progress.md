@@ -501,3 +501,36 @@ chat history is not.
 - Files or artifacts updated: `infra/platform/ingress.tf`, `infra/platform/app.tf`, `infra/platform/README.md`, `progress.md`, `session-handoff.md`
 - Known risk or unresolved issue: the stack costs roughly $157/month while running; the gateway is public and unauthenticated at the edge; Terraform state is local.
 - Next best step: run `./scripts/destroy-eks-demo.sh` when the practice run ends to stop charges.
+
+### Session 019
+
+- Date: 2026-11-10
+- Goal: Publish the withdrawal-soles contract for the colleague and consume the published Billetera Digital PEN API v1.1.0 end to end.
+- Completed:
+  - Moved the generated contract to `api/openapi.yaml` (the location the operator chose), updated `scripts/export_openapi.py`, and regenerated it from the current app: 7 operations, `BearerAuth`, current gateway URL.
+  - Added `api/openapi-service2.yaml` as the reference contract for the consumed wallet API.
+  - Pointed the wallet integration at the new published base `http://52.67.162.209` in settings, `.env.example`, docs, scripts, and the integration agreement.
+  - Added `wallet_service_url` to the platform module (default `http://52.67.162.209`) and wired it into the EKS deployment.
+  - Deployed image `28b1e55` and verified the real wallet flow through the AWS gateway.
+- Verification run:
+  - `curl http://52.67.162.209/health` and `/health/ready`
+  - `GET /v1/wallets?idUsuario=15` against the published wallet
+  - `make openapi` and path comparison against the live `/openapi.json`
+  - `./scripts/deploy-eks-demo.sh` (image `28b1e55`)
+  - `kubectl -n withdrawal-soles rollout status`, pod list, and deployment env inspection
+  - `scripts/wallet_contract_check.py --base-url http://<gateway> --wallet-url http://52.67.162.209`
+  - Negative test: `amount=1000.00` against a 250.00 balance
+  - `GET /v1/wallets/{id}/movements` on the published wallet and `GET /api/v1/withdrawals` on our API
+  - `make verify`, `terraform fmt -check -recursive infra`, `./scripts/verify-terraform.sh`, `./init.sh`
+- Evidence captured:
+  - Published wallet health 200 and ready 200; user 15 wallet `b0414364-5b65-4881-89ad-6ecbf2e99bb4`, balance `25000` cents.
+  - Contract check through the AWS gateway: 11/11; withdrawal `74e2f8e7-a36e-417d-b781-1af20d15ada9` completed, debited, reversed, and balance restored `25000 -> 24000 -> 25000`.
+  - Published wallet movements: `PAYMENT` debit `7bc4cef5-9a05-49af-8bc0-f51eb3d6a325` with `externalReference` equal to our withdrawal id, then `REVERSAL` credit `849ab4e0-3120-48cf-b839-eb09e0e00826` with `reversalOf` pointing at the payment.
+  - Our API stores `wallet_id=b0414364-...`, `wallet_movement_id=7bc4cef5-...`, `wallet_reversal_movement_id=849ab4e0-...`, status `REVERSED`.
+  - Insufficient balance maps to `422 INSUFFICIENT_BALANCE` with no debit.
+  - `api/openapi.yaml` paths match the live `/openapi.json`; servers point at the current gateway, `localhost:8080`, and `localhost:18080`.
+  - `make verify`: ruff clean, 106 tests passed; Terraform format and validate clean; `./init.sh` VERIFICATION PASSED.
+- Commits: `28b1e55 feat(wallet): consume the published Billetera API v1.1.0`, `docs(progress): record published wallet integration`
+- Files or artifacts updated: `api/openapi.yaml`, `api/openapi-service2.yaml`, `scripts/export_openapi.py`, `src/withdrawal_soles/core/settings.py`, `.env.example`, `docs/withdrawal-soles.md`, `service-reference.md`, `withdrawal-soles-integration.md`, `ACUERDO-INTEGRACION-BILLETERA.md`, `scripts/wallet_contract_check.py`, `scripts/simulate_wallet_integration.py`, `infra/platform/app.tf`, `infra/platform/variables.tf`, `infra/platform/README.md`, `progress.md`, `session-handoff.md`
+- Known risk or unresolved issue: the published wallet is an external dependency outside our control; its availability gates withdrawals. The shared development JWT secret is still 18 bytes.
+- Next best step: send `api/openapi.yaml` to the wallet team and keep `wallet_service_url` configurable per environment.

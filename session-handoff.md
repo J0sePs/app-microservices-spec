@@ -11,53 +11,63 @@
   - HTTP checker against the compose stack: 11/11 checks with the balance
     restored.
   - `openspec validate --all --strict`: 8 passed, 0 failed.
-- The AWS practice stack is **up** (Session 018):
+- The AWS practice stack is **up**:
   - `infra/terraform`: 41 resources — VPC, NAT, EKS 1.35 with 2 `t3.small`
     nodes, ECR, private RDS PostgreSQL 15 (`db.t4g.micro`), IAM, SGs.
   - `infra/platform`: Traefik gateway, namespace, DB secret, Alembic job, two
-    app replicas, mock dependencies, ingress.
+    app replicas, mock dependencies, ingress. Image `28b1e55`.
   - Gateway: `http://a0f4e669772d6496a9125e3de34cffbc-795710705.us-east-1.elb.amazonaws.com`
-  - Contract check through the gateway: 11/11 checks passed.
+- The published Billetera Digital PEN API v1.1.0
+  (`http://52.67.162.209`) is consumed end to end through the AWS gateway:
+  - Contract check: 11/11.
+  - Withdrawal `74e2f8e7-a36e-417d-b781-1af20d15ada9`: payment debit
+    `7bc4cef5-9a05-49af-8bc0-f51eb3d6a325`, reversal credit
+    `849ab4e0-3120-48cf-b839-eb09e0e00826`, balance `25000 -> 24000 -> 25000`
+    cents.
 - The local Docker Compose stack is also running and healthy; `localhost:8080`
   serves the API through Traefik.
 
 ## Changed This Session
 
-- `infra/platform/ingress.tf`: added `/usuarios` and `/v1/` prefix routes to
-  `mock-dependencies` so the users and wallet mocks are reachable through the
-  AWS gateway.
-- `infra/platform/app.tf`: added `WITHDRAWAL_SOLES_WALLET_SERVICE_URL` pointing
-  at the in-cluster Traefik service. Without it the app used the external
-  `18.228.136.200` default and returned `503 DEPENDENCY_UNAVAILABLE`.
-- `infra/platform/README.md`: documented the new mock routes and self-contained
-  service URLs.
+- The generated contract now lives at `api/openapi.yaml`; `make openapi` writes
+  there. It reflects 7 operations, `BearerAuth`, the current gateway URL, and
+  the published wallet dependency.
+- `api/openapi-service2.yaml` is checked in as the reference contract for the
+  consumed wallet API.
+- The wallet base URL moved to `http://52.67.162.209` in settings,
+  `.env.example`, docs, scripts, and the platform module
+  (`wallet_service_url` variable, default the published API).
+- The EKS deployment now sets `WITHDRAWAL_SOLES_WALLET_SERVICE_URL` from that
+  variable instead of the in-cluster mock.
 
 ## Broken Or Unverified
 
 - The AWS stack costs roughly $157/month while it runs. Destroy it when the
   practice run ends.
+- The published wallet is an external dependency; its availability gates
+  withdrawals.
 - The gateway is public and has no edge authentication; the service trusts
   `X-User-Id`, so it is practice-only.
 - The development JWT secret (`dev-only-change-me`, 18 bytes) is shared by all
   services. Production must inject a strong secret in every deployment.
 - The real users-service URL is not published. `WITHDRAWAL_SOLES_USERS_SERVICE_URL`
-  is empty locally and falls back to the user-service base URL; when users
-  publishes, set it explicitly.
+  is empty and falls back to the user-service base URL; when users publishes,
+  set it explicitly.
 - Terraform uses local state; an S3 backend with locking is required for shared
   use.
 
 ## Next Best Step
 
-1. Use the AWS gateway for gateway-based checks:
+1. Send `api/openapi.yaml` to the wallet team.
+2. Re-run the integration when the published wallet changes:
 
    ```bash
-   terraform -chdir=infra/platform output -raw gateway_url
    .venv/bin/python scripts/wallet_contract_check.py \
      --base-url http://<gateway> \
-     --wallet-url http://<gateway>
+     --wallet-url http://52.67.162.209
    ```
 
-2. Stop AWS charges after the practice run:
+3. Stop AWS charges after the practice run:
 
    ```bash
    ./scripts/destroy-eks-demo.sh
@@ -77,6 +87,7 @@ openspec validate --all --strict
 
 # HTTP contract check against a running service
 .venv/bin/python scripts/wallet_contract_check.py --base-url http://localhost:8080 --wallet-url http://localhost:8080
+.venv/bin/python scripts/wallet_contract_check.py --base-url http://<gateway> --wallet-url http://52.67.162.209
 
 # Local stack
 docker compose up -d --build
