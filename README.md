@@ -246,6 +246,7 @@ This repository does not create AWS resources automatically.
 - [Service guide: setup, migrations, and examples](docs/withdrawal-soles.md)
 - [Cross-team integration contract](withdrawal-soles-integration.md)
 - [OpenAPI contract](api/openapi.yaml)
+- [Postman collection: withdrawal-soles + Billetera PEN](postman/README.md)
 - [Architecture ERD](openspec/architecture/erd/withdrawal-soles.md)
 - [System architecture](openspec/architecture/README.md)
 

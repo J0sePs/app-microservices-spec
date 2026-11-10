@@ -29,6 +29,9 @@
 
 ## Changed This Session
 
+- `postman/withdrawal-soles-billetera.postman_collection.json` tests both
+  services (withdrawal-soles and Billetera PEN) plus an integrated flow; the
+  collection signs the service JWT automatically.
 - `README.md` now documents only `withdrawal-soles`: responsibilities, domain
   rules, HTTP contract, local commands, and the `withdrawal_soles_db` ERD with
   its constraints and status lifecycle.

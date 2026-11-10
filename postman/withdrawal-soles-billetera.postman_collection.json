@@ -1,0 +1,919 @@
+{
+  "info": {
+    "_postman_id": "b7f2c1a4-9d3e-4c8b-8f21-6a5d0e7c3b94",
+    "name": "withdrawal-soles + Billetera PEN",
+    "description": "Coleccion para probar dos microservicios:\n\n1. **withdrawal-soles** (mio): retiros en soles en `{{withdrawal_base_url}}`. Rutas de negocio con JWT HS256 (`iss=billetera-dev`, `sub=retiros`), header `X-User-Id` y `Idempotency-Key` en mutaciones.\n2. **Billetera Digital PEN v1.1.0** (de mi amigo): billeteras, recargas, cobros, transferencias, movimientos y reversas en `{{wallet_base_url}}`. Montos en **centimos enteros** (1500 = S/ 15.00).\n\n### Antes de ejecutar\n\n- El script de pre-request de la coleccion genera el JWT automaticamente con `jwt_secret`, `jwt_issuer`, `jwt_subject` y `jwt_ttl_seconds`. No hace falta pegarlo a mano.\n- Ajusta `withdrawal_base_url` (`http://localhost:8080` por defecto) y `wallet_base_url` (`http://52.67.162.209` por defecto).\n- Si pruebas contra el stack local de Docker Compose, pon `wallet_base_url = http://localhost:8080` para usar el stub del wallet. Ojo: el stub local solo implementa `GET /v1/wallets`, `GET /v1/wallets/{id}/movements`, `POST /v1/wallets/{id}/payments` y `POST /v1/movements/{id}/reverse`; para probar todo el contrato (crear billetera, recargas, transferencias) usa la API publicada `http://52.67.162.209`. Ademas, el servicio de retiros debe apuntar a la misma billetera (`WITHDRAWAL_SOLES_WALLET_SERVICE_URL`) para que el flujo integrado cuadre.\n- El flujo integrado asume `idUsuario=15` y una cuenta valida; los requests de wallet guardan `wallet_id` y `movement_id` automaticamente.\n\n### Orden sugerido\n\nCarpeta 1 (mi servicio) y carpeta 2 (servicio del amigo) se pueden ejecutar por separado. La carpeta 3 encadena ambos: consulta/abre la billetera, recarga, retira, revisa movimientos, revierte y confirma el saldo.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{jwt_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Genera un JWT HS256 para ambos servicios sin salir de Postman.",
+          "// Postman incluye crypto-js en el sandbox; no requiere instalar nada.",
+          "// Se usa un alias porque el sandbox ya expone un global llamado CryptoJS.",
+          "const cjs = require('crypto-js');",
+          "",
+          "function base64Url(wordArray) {",
+          "    return wordArray",
+          "        .toString(cjs.enc.Base64)",
+          "        .replace(/\\+/g, '-')",
+          "        .replace(/\\//g, '_')",
+          "        .replace(/=+$/, '');",
+          "}",
+          "",
+          "function collectionValue(key, fallback) {",
+          "    const value = pm.collectionVariables.get(key);",
+          "    return (value === undefined || value === null || value === '') ? fallback : value;",
+          "}",
+          "",
+          "const secret = collectionValue('jwt_secret', 'dev-only-change-me');",
+          "const issuer = collectionValue('jwt_issuer', 'billetera-dev');",
+          "const subject = collectionValue('jwt_subject', 'retiros');",
+          "const ttl = parseInt(collectionValue('jwt_ttl_seconds', '3600'), 10) || 3600;",
+          "",
+          "const now = Math.floor(Date.now() / 1000);",
+          "const header = { alg: 'HS256', typ: 'JWT' };",
+          "const payload = {",
+          "    iss: issuer,",
+          "    sub: subject,",
+          "    iat: now,",
+          "    exp: now + ttl,",
+          "    jti: 'postman-' + Date.now()",
+          "};",
+          "",
+          "const encodedHeader = base64Url(cjs.enc.Utf8.parse(JSON.stringify(header)));",
+          "const encodedPayload = base64Url(cjs.enc.Utf8.parse(JSON.stringify(payload)));",
+          "const signature = cjs.HmacSHA256(encodedHeader + '.' + encodedPayload, secret);",
+          "const token = encodedHeader + '.' + encodedPayload + '.' + base64Url(signature);",
+          "",
+          "pm.collectionVariables.set('jwt_token', token);",
+          "console.log('JWT generado: sub=' + subject + ', iss=' + issuer + ', exp=' + (now + ttl));"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    { "key": "withdrawal_base_url", "value": "http://localhost:8080" },
+    { "key": "wallet_base_url", "value": "http://52.67.162.209" },
+    { "key": "jwt_secret", "value": "dev-only-change-me" },
+    { "key": "jwt_issuer", "value": "billetera-dev" },
+    { "key": "jwt_subject", "value": "retiros" },
+    { "key": "jwt_ttl_seconds", "value": "3600" },
+    { "key": "jwt_token", "value": "" },
+    { "key": "user_id", "value": "9d1e2f3a-4b5c-6d7e-8f90-1a2b3c4d5e6f" },
+    { "key": "account_id", "value": "1c7a5e0e-4f4a-4a1f-9a3e-7b9f0d2a6c11" },
+    { "key": "wallet_user_id", "value": "15" },
+    { "key": "wallet_id", "value": "" },
+    { "key": "target_wallet_id", "value": "dadf4b90-cb5f-48ac-8046-5acb3726a7a9" },
+    { "key": "withdrawal_id", "value": "" },
+    { "key": "movement_id", "value": "" },
+    { "key": "withdrawal_amount", "value": "10.00" },
+    { "key": "wallet_amount_cents", "value": "1000" },
+    { "key": "top_up_cents", "value": "2500" },
+    { "key": "wallet_balance_cents", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. withdrawal-soles (mio)",
+      "description": "Retiros en soles. Requiere JWT (sub=retiros), X-User-Id y, en mutaciones, Idempotency-Key.",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{withdrawal_base_url}}/health",
+            "description": "200 cuando la base de datos responde; 503 cuando no."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Health responde 200 o 503', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 503]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear retiro (S/ 10.00)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "X-User-Id", "value": "{{user_id}}", "type": "text" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"account_id\": \"{{account_id}}\",\n  \"amount\": \"{{withdrawal_amount}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{withdrawal_base_url}}/api/v1/withdrawals",
+            "description": "Valida titularidad, limites y saldo; debita la billetera y reporta al ledger. Devuelve 201 (o 200 si se reintenta con la misma Idempotency-Key). Guarda withdrawal_id y wallet_id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Retiro creado o replay idempotente', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    if (body.id) { pm.collectionVariables.set('withdrawal_id', body.id); }",
+                  "    if (body.wallet_id) { pm.collectionVariables.set('wallet_id', body.wallet_id); }",
+                  "    if (body.wallet_movement_id) { pm.collectionVariables.set('movement_id', body.wallet_movement_id); }",
+                  "    console.log('withdrawal_id=' + body.id + ', status=' + body.status);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar retiros",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-User-Id", "value": "{{user_id}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{withdrawal_base_url}}/api/v1/withdrawals?limit=20&offset=0",
+              "host": ["{{withdrawal_base_url}}"],
+              "path": ["api", "v1", "withdrawals"],
+              "query": [
+                { "key": "limit", "value": "20" },
+                { "key": "offset", "value": "0" }
+              ]
+            },
+            "description": "Solo devuelve operaciones del usuario autenticado. Filtros opcionales: account_id, status, limit, offset."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Listado devuelto', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.test('Respuesta paginada', function () {",
+                  "        pm.expect(body).to.have.property('items');",
+                  "        pm.expect(body).to.have.property('total');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Obtener retiro",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-User-Id", "value": "{{user_id}}", "type": "text" }
+            ],
+            "url": "{{withdrawal_base_url}}/api/v1/withdrawals/{{withdrawal_id}}",
+            "description": "Lee una operacion propia. Ejecuta antes 'Crear retiro' para llenar withdrawal_id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Retiro disponible', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cancelar retiro",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-User-Id", "value": "{{user_id}}", "type": "text" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}", "type": "text" }
+            ],
+            "url": "{{withdrawal_base_url}}/api/v1/withdrawals/{{withdrawal_id}}/cancel",
+            "description": "Rechaza una operacion PENDING. Repetir la llamada es idempotente."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Cancelacion aceptada o estado invalido (409)', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 409]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reversar retiro",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "X-User-Id", "value": "{{user_id}}", "type": "text" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Reversa solicitada desde Postman\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{withdrawal_base_url}}/api/v1/withdrawals/{{withdrawal_id}}/reverse",
+            "description": "Devuelve el monto completo a la billetera con un movimiento compensatorio y marca REVERSED. Una segunda reversa responde 422."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Reversa aceptada (200) o ya reversada (422)', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 422]);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    if (body.wallet_reversal_movement_id) {",
+                  "        pm.collectionVariables.set('reversal_movement_id', body.wallet_reversal_movement_id);",
+                  "    }",
+                  "    console.log('status=' + body.status);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reintentar reporte",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "X-User-Id", "value": "{{user_id}}", "type": "text" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}", "type": "text" }
+            ],
+            "url": "{{withdrawal_base_url}}/api/v1/withdrawals/{{withdrawal_id}}/report",
+            "description": "Reintenta el reporte al ledger. 200 si pasa a COMPLETED; 202 si el ledger sigue fallando."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Reporte procesado (200/202) o estado invalido (409)', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 202, 409]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Billetera PEN (amigo)",
+      "description": "Contrato Billetera Digital PEN v1.1.0. Montos en centimos enteros. Los requests de escritura requieren Idempotency-Key. Las respuestas traen X-Correlation-Id.",
+      "item": [
+        {
+          "name": "Health (liveness)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{wallet_base_url}}/health",
+            "description": "Proceso vivo. No requiere JWT."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Billetera viva', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Health (readiness)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{wallet_base_url}}/health/ready",
+            "description": "Servicio y PostgreSQL operativos. No requiere JWT."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Billetera lista', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Abrir billetera",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}", "type": "text" },
+              { "key": "X-Correlation-Id", "value": "{{$guid}}", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idUsuario\": {{wallet_user_id}}\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{wallet_base_url}}/v1/wallets",
+            "description": "Crea la billetera PEN del usuario. El usuario debe existir y estar activo en el servicio de usuarios. 201 al crear, 200 en replay, 409 si ya existe."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Billetera creada o ya existente', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 409]);",
+                  "});",
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    if (body.id) { pm.collectionVariables.set('wallet_id', body.id); }",
+                  "    if (typeof body.balance === 'number') {",
+                  "        pm.collectionVariables.set('wallet_balance_cents', String(body.balance));",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Billetera por idUsuario",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Correlation-Id", "value": "{{$guid}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{wallet_base_url}}/v1/wallets?idUsuario={{wallet_user_id}}",
+              "host": ["{{wallet_base_url}}"],
+              "path": ["v1", "wallets"],
+              "query": [
+                { "key": "idUsuario", "value": "{{wallet_user_id}}" }
+              ]
+            },
+            "description": "Devuelve la billetera y su saldo actual. Guarda wallet_id y wallet_balance_cents."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Billetera encontrada', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    if (body.id) { pm.collectionVariables.set('wallet_id', body.id); }",
+                  "    if (typeof body.balance === 'number') {",
+                  "        pm.collectionVariables.set('wallet_balance_cents', String(body.balance));",
+                  "    }",
+                  "    console.log('wallet_id=' + body.id + ', balance=' + body.balance + ' centimos');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Billetera por UUID",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Correlation-Id", "value": "{{$guid}}", "type": "text" }
+            ],
+            "url": "{{wallet_base_url}}/v1/wallets/{{wallet_id}}",
+            "description": "Requiere wallet_id (lo llena el request anterior)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Billetera disponible', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Recargar (top-up)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}", "type": "text" },
+              { "key": "X-Correlation-Id", "value": "{{$guid}}", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": {{top_up_cents}},\n  \"currency\": \"PEN\",\n  \"externalReference\": \"DEP-POSTMAN-{{$timestamp}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{wallet_base_url}}/v1/wallets/{{wallet_id}}/top-ups",
+            "description": "Acredita centimos. Normalmente lo llama deposit-soles. Guarda movement_id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Recarga aceptada', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    if (body.id) { pm.collectionVariables.set('movement_id', body.id); }",
+                  "    console.log('movement_id=' + body.id + ', type=' + body.type);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cobrar (payment / retiro)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}", "type": "text" },
+              { "key": "X-Correlation-Id", "value": "{{$guid}}", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": {{wallet_amount_cents}},\n  \"currency\": \"PEN\",\n  \"externalReference\": \"RET-POSTMAN-{{$timestamp}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{wallet_base_url}}/v1/wallets/{{wallet_id}}/payments",
+            "description": "Debita centimos. Es la operacion que usa withdrawal-soles. 422 si el saldo no alcanza. Guarda movement_id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Cobro aceptado o saldo insuficiente', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 422]);",
+                  "});",
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    if (body.id) { pm.collectionVariables.set('movement_id', body.id); }",
+                  "    console.log('movement_id=' + body.id + ', type=' + body.type);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Movimientos",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Correlation-Id", "value": "{{$guid}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{wallet_base_url}}/v1/wallets/{{wallet_id}}/movements?limit=20",
+              "host": ["{{wallet_base_url}}"],
+              "path": ["v1", "wallets", "{{wallet_id}}", "movements"],
+              "query": [
+                { "key": "limit", "value": "20" }
+              ]
+            },
+            "description": "Historial del mas reciente al mas antiguo. Filtros opcionales: from, to, cursor, limit. Guarda el primer movement_id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Historial devuelto', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    if (body.items && body.items.length > 0) {",
+                  "        pm.collectionVariables.set('movement_id', body.items[0].id);",
+                  "        console.log('ultimo movement_id=' + body.items[0].id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Transferir entre billeteras",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}", "type": "text" },
+              { "key": "X-Correlation-Id", "value": "{{$guid}}", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceWalletId\": \"{{wallet_id}}\",\n  \"targetWalletId\": \"{{target_wallet_id}}\",\n  \"amount\": 100,\n  \"currency\": \"PEN\",\n  \"externalReference\": \"TRX-POSTMAN-{{$timestamp}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{wallet_base_url}}/v1/transfers",
+            "description": "Mueve soles entre dos billeteras en una sola transaccion. `target_wallet_id` debe existir en la billetera que estes usando."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Transferencia o replay', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 422]);",
+                  "});",
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    if (body.transferId) { pm.collectionVariables.set('transfer_id', body.transferId); }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reversar movimiento",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}", "type": "text" },
+              { "key": "X-Correlation-Id", "value": "{{$guid}}", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"error de caja (prueba Postman)\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{wallet_base_url}}/v1/movements/{{movement_id}}/reverse",
+            "description": "Crea el asiento compensatorio por el total. `movement_id` sale de 'Cobrar', 'Recargar' o 'Movimientos'."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Reversa o replay', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 422]);",
+                  "});",
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    if (body.movements && body.movements.length > 0) {",
+                  "        pm.collectionVariables.set('reversal_movement_id', body.movements[0].id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Flujo integrado (ambos servicios)",
+      "description": "Cadena completa: billetera -> recarga -> retiro -> movimientos -> reversa -> saldo. Asegurate de que withdrawal-soles apunte a la misma billetera que wallet_base_url.",
+      "item": [
+        {
+          "name": "1. Obtener billetera (wallet_id)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Correlation-Id", "value": "{{$guid}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{wallet_base_url}}/v1/wallets?idUsuario={{wallet_user_id}}",
+              "host": ["{{wallet_base_url}}"],
+              "path": ["v1", "wallets"],
+              "query": [
+                { "key": "idUsuario", "value": "{{wallet_user_id}}" }
+              ]
+            },
+            "description": "Paso 1. Si responde 404, ejecuta 'Abrir billetera' en la carpeta 2."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Billetera encontrada', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('wallet_id', body.id);",
+                  "    pm.collectionVariables.set('wallet_balance_cents', String(body.balance));",
+                  "    console.log('Saldo inicial: ' + body.balance + ' centimos');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. Recargar S/ 25.00 (2500 centimos)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}", "type": "text" },
+              { "key": "X-Correlation-Id", "value": "{{$guid}}", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": {{top_up_cents}},\n  \"currency\": \"PEN\",\n  \"externalReference\": \"DEP-POSTMAN-{{$timestamp}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{wallet_base_url}}/v1/wallets/{{wallet_id}}/top-ups",
+            "description": "Paso 2. Deja saldo suficiente para el retiro de S/ 10.00."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Recarga aceptada', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3. Consultar billetera (saldo antes)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Correlation-Id", "value": "{{$guid}}", "type": "text" }
+            ],
+            "url": "{{wallet_base_url}}/v1/wallets?idUsuario={{wallet_user_id}}",
+            "description": "Paso 3. Consulta por idUsuario (soportado por la API publicada y por el stub local) y guarda el saldo previo en wallet_balance_before."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Billetera disponible', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('wallet_balance_before', String(body.balance));",
+                  "    console.log('Saldo antes del retiro: ' + body.balance + ' centimos');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4. Crear retiro S/ 10.00 (mi servicio)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "X-User-Id", "value": "{{user_id}}", "type": "text" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"account_id\": \"{{account_id}}\",\n  \"amount\": \"{{withdrawal_amount}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{withdrawal_base_url}}/api/v1/withdrawals",
+            "description": "Paso 4. El servicio valida la cuenta, debita la billetera y reporta al ledger. Guarda withdrawal_id y los ids de la billetera."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Retiro creado', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('withdrawal_id', body.id);",
+                  "    if (body.wallet_movement_id) {",
+                  "        pm.collectionVariables.set('withdrawal_movement_id', body.wallet_movement_id);",
+                  "    }",
+                  "    console.log('withdrawal_id=' + body.id + ', status=' + body.status);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5. Consultar retiro",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-User-Id", "value": "{{user_id}}", "type": "text" }
+            ],
+            "url": "{{withdrawal_base_url}}/api/v1/withdrawals/{{withdrawal_id}}",
+            "description": "Paso 5. Confirma el estado (COMPLETED si el ledger respondio) y los ids de la billetera."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Retiro disponible', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    console.log('status=' + body.status + ', wallet_movement_id=' + body.wallet_movement_id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6. Movimientos de la billetera",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Correlation-Id", "value": "{{$guid}}", "type": "text" }
+            ],
+            "url": {
+              "raw": "{{wallet_base_url}}/v1/wallets/{{wallet_id}}/movements?limit=10",
+              "host": ["{{wallet_base_url}}"],
+              "path": ["v1", "wallets", "{{wallet_id}}", "movements"],
+              "query": [
+                { "key": "limit", "value": "10" }
+              ]
+            },
+            "description": "Paso 6. Debe aparecer el PAYMENT con externalReference igual al withdrawal_id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Historial devuelto', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    const withdrawalId = pm.collectionVariables.get('withdrawal_id');",
+                  "    const match = (body.items || []).find(function (m) {",
+                  "        return m.externalReference === withdrawalId;",
+                  "    });",
+                  "    pm.test('El cobro del retiro esta en el historial', function () {",
+                  "        pm.expect(match, 'movimiento con externalReference=' + withdrawalId).to.not.be.undefined;",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "7. Reversar retiro (mi servicio)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json", "type": "text" },
+              { "key": "X-User-Id", "value": "{{user_id}}", "type": "text" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Reversa del flujo integrado Postman\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{withdrawal_base_url}}/api/v1/withdrawals/{{withdrawal_id}}/reverse",
+            "description": "Paso 7. Devuelve el monto completo a la billetera."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Reversa aceptada', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 422]);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('reversal_movement_id', body.wallet_reversal_movement_id || '');",
+                  "    console.log('status=' + body.status + ', reversal=' + body.wallet_reversal_movement_id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "8. Consultar saldo restaurado",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Correlation-Id", "value": "{{$guid}}", "type": "text" }
+            ],
+            "url": "{{wallet_base_url}}/v1/wallets?idUsuario={{wallet_user_id}}",
+            "description": "Paso 8. El saldo debe volver al valor guardado en wallet_balance_before."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Billetera disponible', function () {",
+                  "    pm.expect(pm.response.code).to.equal(200);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    const before = pm.collectionVariables.get('wallet_balance_before');",
+                  "    console.log('Saldo final: ' + body.balance + ' centimos (antes: ' + before + ')');",
+                  "    pm.test('Saldo restaurado tras la reversa', function () {",
+                  "        pm.expect(String(body.balance)).to.equal(String(before));",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

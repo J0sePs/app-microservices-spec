@@ -554,3 +554,26 @@ chat history is not.
 - Files or artifacts updated: `README.md`, `progress.md`, `session-handoff.md`
 - Known risk or unresolved issue: the five moved integration drafts remain deleted in the working tree (`temp/` is untracked) and were not committed; `service-reference.md` and `withdrawal-soles-integration.md` still link to `ACUERDO-INTEGRACION-BILLETERA.md`.
 - Next best step: decide whether to restore or permanently remove the moved integration drafts and fix their remaining links.
+
+### Session 021
+
+- Date: 2026-11-10
+- Goal: Add a Postman collection that tests both `withdrawal-soles` and the teammate's Billetera Digital PEN API.
+- Completed:
+  - Added `postman/withdrawal-soles-billetera.postman_collection.json` with three folders: my service, the Billetera PEN contract, and an integrated end-to-end flow.
+  - Added a collection pre-request script that signs the HS256 service JWT automatically (`iss=billetera-dev`, `sub=retiros`) using Postman's built-in `crypto-js`.
+  - Added test scripts that capture `withdrawal_id`, `wallet_id`, `movement_id`, and balances between requests.
+  - Added `postman/README.md` with import steps, variables, idempotency notes, and the local-stub versus published-API difference.
+  - Linked the collection from the root `README.md`.
+- Verification run:
+  - `python3 -m json.tool postman/withdrawal-soles-billetera.postman_collection.json`
+  - Safe smoke run with Newman against the live stack (5 requests, 6 assertions, 0 failures).
+  - Full collection with Newman against the local wallet stub (25 requests, 0 request failures; all withdrawal and integrated-flow assertions passed; the only failures were wallet-contract routes the local stub does not implement).
+  - `./init.sh` — VERIFICATION PASSED (106 tests).
+- Evidence captured:
+  - Withdrawal folder: create `201`, list `200`, get `200`, cancel `409` (already completed), reverse `200`, report `409` (already reversed).
+  - Integrated flow: wallet lookup, withdrawal create, movement visible with `externalReference` equal to the withdrawal id, reverse `200`, balance restored.
+- Commits: `test(postman): add withdrawal-soles and Billetera PEN collection`
+- Files or artifacts updated: `postman/withdrawal-soles-billetera.postman_collection.json`, `postman/README.md`, `README.md`, `progress.md`, `session-handoff.md`
+- Known risk or unresolved issue: the local wallet stub only implements a subset of the friend's API, so the full wallet folder must run against `http://52.67.162.209`.
+- Next best step: share the collection with the teammate and adjust `wallet_user_id`/`wallet_id` to their test data.
