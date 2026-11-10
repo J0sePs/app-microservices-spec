@@ -11,32 +11,33 @@
   - HTTP checker against the compose stack: 11/11 checks with the balance
     restored.
   - `openspec validate --all --strict`: 8 passed, 0 failed.
-- The AWS practice stack is **destroyed**. The 2026-11-06 teardown removed the
-  platform, the infra module (41 resources), the ECR image, and the EKS log
-  group; both Terraform states are empty and no billable resources remain.
-- The local Docker Compose stack was rebuilt and is running and healthy;
-  `localhost:8080` serves the API through Traefik and the HTTP contract check
-  passes 11/11.
+- The AWS practice stack is **up** (Session 018):
+  - `infra/terraform`: 41 resources — VPC, NAT, EKS 1.35 with 2 `t3.small`
+    nodes, ECR, private RDS PostgreSQL 15 (`db.t4g.micro`), IAM, SGs.
+  - `infra/platform`: Traefik gateway, namespace, DB secret, Alembic job, two
+    app replicas, mock dependencies, ingress.
+  - Gateway: `http://a0f4e669772d6496a9125e3de34cffbc-795710705.us-east-1.elb.amazonaws.com`
+  - Contract check through the gateway: 11/11 checks passed.
+- The local Docker Compose stack is also running and healthy; `localhost:8080`
+  serves the API through Traefik.
 
 ## Changed This Session
 
-- Added mandatory inbound service JWT validation and kept `X-User-Id` as the
-  end-user identity.
-- Added `GET /usuarios/{idUsuario}` validation before debit and reversal, with
-  `USER_NOT_FOUND`, `USER_INACTIVE`, and `DEPENDENCY_UNAVAILABLE` mapping.
-- Extended the mock and simulator with JWT verification and the users stub.
-- Added `scripts/wallet_contract_check.py` and `make contract-check` for a
-  teammate to verify a running service over HTTP.
-- Regenerated `openapi.yaml` with the `BearerAuth` scheme and updated the
-  integration documents.
-- Archived `secure-api-jwt-users-contract` as
-  `2026-11-06-secure-api-jwt-users-contract`; the main specs now include
-  `service-authentication`.
+- `infra/platform/ingress.tf`: added `/usuarios` and `/v1/` prefix routes to
+  `mock-dependencies` so the users and wallet mocks are reachable through the
+  AWS gateway.
+- `infra/platform/app.tf`: added `WITHDRAWAL_SOLES_WALLET_SERVICE_URL` pointing
+  at the in-cluster Traefik service. Without it the app used the external
+  `18.228.136.200` default and returned `503 DEPENDENCY_UNAVAILABLE`.
+- `infra/platform/README.md`: documented the new mock routes and self-contained
+  service URLs.
 
 ## Broken Or Unverified
 
-- The AWS environment is down, so the gateway-based checks are unverified until
-  the stack is re-applied and the image is redeployed.
+- The AWS stack costs roughly $157/month while it runs. Destroy it when the
+  practice run ends.
+- The gateway is public and has no edge authentication; the service trusts
+  `X-User-Id`, so it is practice-only.
 - The development JWT secret (`dev-only-change-me`, 18 bytes) is shared by all
   services. Production must inject a strong secret in every deployment.
 - The real users-service URL is not published. `WITHDRAWAL_SOLES_USERS_SERVICE_URL`
@@ -47,22 +48,16 @@
 
 ## Next Best Step
 
-1. Use the running local stack to test the JWT and users contract:
+1. Use the AWS gateway for gateway-based checks:
 
    ```bash
+   terraform -chdir=infra/platform output -raw gateway_url
    .venv/bin/python scripts/wallet_contract_check.py \
-     --base-url http://localhost:8080 \
-     --wallet-url http://localhost:8080
+     --base-url http://<gateway> \
+     --wallet-url http://<gateway>
    ```
 
-2. Redeploy AWS only when the gateway is needed:
-
-   ```bash
-   terraform -chdir=infra/terraform apply
-   ./scripts/deploy-eks-demo.sh
-   ```
-
-3. Stop AWS charges after any practice run:
+2. Stop AWS charges after the practice run:
 
    ```bash
    ./scripts/destroy-eks-demo.sh
@@ -92,6 +87,7 @@ curl http://localhost:8080/docs
 terraform -chdir=infra/terraform apply
 ./scripts/deploy-eks-demo.sh
 terraform -chdir=infra/platform output -raw gateway_url
+kubectl -n withdrawal-soles get pods,svc,ingress
 
 # AWS teardown
 ./scripts/destroy-eks-demo.sh

@@ -470,3 +470,34 @@ chat history is not.
 - Files or artifacts updated: `progress.md`, `session-handoff.md`
 - Known risk or unresolved issue: the local stack is for development only; the AWS practice stack remains destroyed.
 - Next best step: use `localhost:8080` for development, or re-apply the AWS stack only when the gateway is needed.
+
+### Session 018
+
+- Date: 2026-11-10
+- Goal: Bring up the AWS practice stack (EKS, RDS, ECR, Traefik gateway) and make the deployed service fully functional.
+- Completed:
+  - Applied `infra/terraform`: 41 resources added (VPC, subnets, NAT, EKS 1.35, node group, IAM, security groups, ECR, private RDS PostgreSQL 15).
+  - Ran `./scripts/deploy-eks-demo.sh`: built and pushed image tag `c3f8fd7`, applied the platform module (Traefik via Helm, namespace, DB secret, Alembic job, app and mock deployments, ingress), updated kubeconfig.
+  - Found and fixed two platform gaps that broke the wallet flow in AWS:
+    - `infra/platform/ingress.tf` did not route `/usuarios` or `/v1/` (wallet) to `mock-dependencies`; added both prefix paths.
+    - `infra/platform/app.tf` did not set `WITHDRAWAL_SOLES_WALLET_SERVICE_URL`, so the app fell back to the external `18.228.136.200` and returned `503 DEPENDENCY_UNAVAILABLE`; it now points at the in-cluster Traefik service.
+  - Updated `infra/platform/README.md` for the new mock routes and the self-contained service URLs.
+- Verification run:
+  - `terraform -chdir=infra/terraform plan` and `apply`
+  - `./scripts/deploy-eks-demo.sh`
+  - `kubectl -n withdrawal-soles get pods,svc,ingress` and `kubectl get nodes`
+  - `curl http://<gateway>/health`
+  - `scripts/wallet_contract_check.py --base-url http://<gateway> --wallet-url http://<gateway>`
+  - `terraform fmt -check -recursive infra` and `./scripts/verify-terraform.sh`
+  - `./init.sh`
+- Evidence captured:
+  - Plan: 41 to add; apply complete. Platform apply: 10 resources; ingress fix: 1 change; wallet env fix: 1 change.
+  - EKS `app-nube-2-dev-eks` active with 2 `Ready` `t3.small` nodes (`v1.35.9-eks-8418f54`); RDS `app-nube-2-dev-postgres` `db.t4g.micro` available; NAT gateway available; ECR repo `app-nube-2-dev/withdrawal-soles`.
+  - Pods: 2/2 app replicas Running, mock Running, migration Job Completed.
+  - Gateway `http://a0f4e669772d6496a9125e3de34cffbc-795710705.us-east-1.elb.amazonaws.com`: `/health` 200.
+  - Contract check: 11/11 passed; withdrawal `a4fe9755-c44f-4828-9a3e-e215da7a161a` completed and reversed; balance `25000 -> 24000 -> 25000` cents.
+  - `terraform fmt` clean; `verify-terraform.sh` valid; `./init.sh` VERIFICATION PASSED.
+- Commits: `fix(infra): route mock users/wallet paths and set wallet URL on EKS`, `docs(progress): record AWS stack bring-up`
+- Files or artifacts updated: `infra/platform/ingress.tf`, `infra/platform/app.tf`, `infra/platform/README.md`, `progress.md`, `session-handoff.md`
+- Known risk or unresolved issue: the stack costs roughly $157/month while running; the gateway is public and unauthenticated at the edge; Terraform state is local.
+- Next best step: run `./scripts/destroy-eks-demo.sh` when the practice run ends to stop charges.
