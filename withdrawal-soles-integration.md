@@ -13,12 +13,12 @@ del movimiento. También puede revertir el débito completo.
 
 | Dato | Valor |
 | --- | --- |
-| Base de práctica | `http://a6c1a4b5ffa8a44808f8a8a0784fe0d7-266125410.us-east-1.elb.amazonaws.com` |
+| Base de práctica | `http://a0f4e669772d6496a9125e3de34cffbc-795710705.us-east-1.elb.amazonaws.com` |
 | Base local | `http://localhost:8080` |
-| Billetera PEN | `http://18.228.136.200` |
+| Billetera PEN | `http://52.67.162.209` |
 | Salud | `GET /health` |
 | Documentación | `/docs` |
-| OpenAPI | `/openapi.json` y [`openapi.yaml`](openapi.yaml) |
+| OpenAPI | `/openapi.json` y [`api/openapi.yaml`](api/openapi.yaml) |
 | Región AWS | `us-east-1` |
 | Cluster | `app-nube-2-dev-eks` |
 | Node group | `app-nube-2-dev-nodes` |

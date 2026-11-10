@@ -14,7 +14,7 @@ import yaml
 
 from withdrawal_soles.main import app
 
-OUTPUT = Path(__file__).resolve().parent.parent / "openapi.yaml"
+OUTPUT = Path(__file__).resolve().parent.parent / "api" / "openapi.yaml"
 
 OPERATION_METADATA = {
     ("/api/v1/withdrawals", "post"): (
@@ -71,8 +71,9 @@ def enrich(spec: dict) -> dict:
         "`Idempotency-Key`. Amounts are decimal strings in PEN; the minimum is "
         "10.00, the maximum per operation is 5000.00, and the daily "
         "accumulated limit per account is 10000.00.\n\n"
-        "The external PEN wallet is the balance owner. Before debiting or "
-        "reversing, the service validates the wallet owner with "
+        "The external PEN wallet is the balance owner (Billetera Digital PEN "
+        "API v1.1.0, base `http://52.67.162.209`). Before debiting or reversing, "
+        "the service validates the wallet owner with "
         "`GET /usuarios/{idUsuario}`. A successful withdrawal debits the wallet "
         "before it is persisted and stores the wallet and movement identifiers; "
         "`POST /api/v1/withdrawals/{id}/reverse` returns the full amount to the "
@@ -85,7 +86,7 @@ def enrich(spec: dict) -> dict:
     spec["servers"] = [
         {
             "url": (
-                "http://a6c1a4b5ffa8a44808f8a8a0784fe0d7-266125410"
+                "http://a0f4e669772d6496a9125e3de34cffbc-795710705"
                 ".us-east-1.elb.amazonaws.com"
             ),
             "description": "AWS EKS public gateway (practice; re-created on apply)",

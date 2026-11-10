@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     user_service_url: str = "http://localhost:8080"
     users_service_url: str | None = None
     transaction_service_url: str = "http://localhost:8080"
-    wallet_service_url: str = "http://18.228.136.200"
+    wallet_service_url: str = "http://52.67.162.209"
     user_service_timeout_seconds: float = 2.0
     users_service_timeout_seconds: float = 2.0
     transaction_service_timeout_seconds: float = 3.0

@@ -54,7 +54,7 @@ from withdrawal_soles.main import create_app  # noqa: E402
 
 ACCOUNT_ID = UUID("1c7a5e0e-4f4a-4a1f-9a3e-7b9f0d2a6c11")
 USER_ID = UUID("9d1e2f3a-4b5c-6d7e-8f90-1a2b3c4d5e6f")
-LIVE_BASE_URL = "http://18.228.136.200"
+LIVE_BASE_URL = "http://52.67.162.209"
 SEED_USERS = {15: True, 16: True, 17: False, 18: True, 19: True}
 
 

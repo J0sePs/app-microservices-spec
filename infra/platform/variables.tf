@@ -72,6 +72,12 @@ variable "image_pull_policy" {
   }
 }
 
+variable "wallet_service_url" {
+  description = "Base URL of the published PEN wallet API consumed for debits and reversals."
+  type        = string
+  default     = "http://52.67.162.209"
+}
+
 variable "db_username" {
   description = "PostgreSQL user for the application."
   type        = string

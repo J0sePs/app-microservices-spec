@@ -134,7 +134,7 @@ resource "kubernetes_deployment_v1" "app" {
 
           env {
             name  = "WITHDRAWAL_SOLES_WALLET_SERVICE_URL"
-            value = "http://${local.gateway_service}"
+            value = var.wallet_service_url
           }
 
           env {

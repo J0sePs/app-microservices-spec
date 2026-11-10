@@ -267,7 +267,8 @@ reversar.
 - [ ] Confirmar quién crea y recarga la billetera de prueba (billetera o
       depósitos).
 - [x] Confirmar la URL pública de usuarios y el `idUsuario` de prueba: la
-      billetera publicó `http://18.228.136.200` con los usuarios 15, 16, 17 y 18.
+      billetera publicó `http://52.67.162.209` (antes `http://18.228.136.200`)
+      con los usuarios 15, 16, 17 y 18.
 - [x] Adoptar el JWT de servicio (`sub=retiros`) también en la API de retiros.
 
 ## 9. Lo que no cambia

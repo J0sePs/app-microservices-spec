@@ -56,7 +56,7 @@ Settings use the `WITHDRAWAL_SOLES_` prefix. See `.env.example`.
 | `WITHDRAWAL_SOLES_USER_SERVICE_URL` | `http://localhost:8080` | Gateway base URL for user-service |
 | `WITHDRAWAL_SOLES_USERS_SERVICE_URL` | empty (falls back to user service URL) | Base URL for `GET /usuarios/{idUsuario}` |
 | `WITHDRAWAL_SOLES_TRANSACTION_SERVICE_URL` | `http://localhost:8080` | Gateway base URL for transaction-service |
-| `WITHDRAWAL_SOLES_WALLET_SERVICE_URL` | `http://18.228.136.200` | Published PEN wallet base URL |
+| `WITHDRAWAL_SOLES_WALLET_SERVICE_URL` | `http://52.67.162.209` | Published PEN wallet base URL |
 | `WITHDRAWAL_SOLES_BUSINESS_TIMEZONE` | `America/Lima` | Daily limit window |
 | `WITHDRAWAL_SOLES_HTTP_MAX_ATTEMPTS` | `3` | Outbound retry bound |
 | `WITHDRAWAL_SOLES_HTTP_BACKOFF_SECONDS` | `0.2` | Outbound retry backoff |
@@ -163,7 +163,7 @@ Run the HTTP-only contract check against a running stack:
 
 ### OpenAPI contract
 
-The generated contract is checked in at [`openapi.yaml`](../openapi.yaml). It
+The generated contract is checked in at [`api/openapi.yaml`](../api/openapi.yaml). It
 matches the running FastAPI app, including required headers and error
 responses. Regenerate it after changing routes or schemas:
 

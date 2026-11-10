@@ -11,10 +11,10 @@ info:
     is 10000.00.
 
 
-    The external PEN wallet is the balance owner. Before debiting or reversing, the service validates
-    the wallet owner with `GET /usuarios/{idUsuario}`. A successful withdrawal debits the wallet before
-    it is persisted and stores the wallet and movement identifiers; `POST /api/v1/withdrawals/{id}/reverse`
-    returns the full amount to the wallet.'
+    The external PEN wallet is the balance owner (Billetera Digital PEN API v1.1.0, base `http://52.67.162.209`).
+    Before debiting or reversing, the service validates the wallet owner with `GET /usuarios/{idUsuario}`.
+    A successful withdrawal debits the wallet before it is persisted and stores the wallet and movement
+    identifiers; `POST /api/v1/withdrawals/{id}/reverse` returns the full amount to the wallet.'
   version: 0.1.0
   contact:
     name: app-nube-2
@@ -709,7 +709,7 @@ components:
         authenticates the caller; the end-user identity still travels in `X-User-Id`.
       scheme: bearer
 servers:
-- url: http://a6c1a4b5ffa8a44808f8a8a0784fe0d7-266125410.us-east-1.elb.amazonaws.com
+- url: http://a0f4e669772d6496a9125e3de34cffbc-795710705.us-east-1.elb.amazonaws.com
   description: AWS EKS public gateway (practice; re-created on apply)
 - url: http://localhost:8080
   description: Local Docker Compose through Traefik

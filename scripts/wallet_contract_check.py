@@ -9,7 +9,7 @@ and verifies the wallet balance when the wallet URL is provided.
 
     .venv/bin/python scripts/wallet_contract_check.py \
         --base-url http://<gateway> \
-        --wallet-url http://18.228.136.200
+        --wallet-url http://52.67.162.209
 
 The withdrawal is always reversed before exit. If a step fails after the debit,
 the script tries the reversal and prints the `wallet_movement_id` to recover.

@@ -217,7 +217,7 @@ The daily limit of `S/ 10,000.00` is enforced per account over the current
 
 - [Cross-team integration contract](withdrawal-soles-integration.md)
 - [Wallet integration agreement](ACUERDO-INTEGRACION-BILLETERA.md)
-- [OpenAPI contract](openapi.yaml)
+- [OpenAPI contract](api/openapi.yaml)
 - [Service documentation](docs/withdrawal-soles.md)
 - [Architecture ERD](openspec/architecture/erd/withdrawal-soles.md)
 - [Integration contract](openspec/architecture/integration-contract.md)
