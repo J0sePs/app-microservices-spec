@@ -445,3 +445,28 @@ chat history is not.
 - Files or artifacts updated: `progress.md`, `session-handoff.md`, `feature_list.json`, `service-reference.md`
 - Known risk or unresolved issue: none; no billable AWS resources from this stack remain.
 - Next best step: keep the local compose stack for development; redeploy with `terraform -chdir=infra/terraform apply` and `./scripts/deploy-eks-demo.sh` only when the gateway is needed again.
+
+### Session 017
+
+- Date: 2026-11-10
+- Goal: Bring the local infrastructure back up on request.
+- Completed:
+  - Rebuilt and started the local Docker Compose stack (`db`, `withdrawal-soles`, `mock-dependencies`, `traefik`).
+  - Confirmed Alembic applied `0002_add_wallet_integration` and all service tables exist.
+  - Ran the HTTP contract check through Traefik to validate the full withdrawal, wallet debit, reversal, and idempotency flow.
+- Verification run:
+  - `docker compose up -d --build`
+  - `docker compose ps`
+  - `curl http://localhost:8080/health`, `/docs`, `http://localhost:8081/dashboard/`
+  - `docker compose exec db psql -c '\dt'` and `select version_num from alembic_version`
+  - `.venv/bin/python scripts/wallet_contract_check.py --base-url http://localhost:8080 --wallet-url http://localhost:8080`
+  - `./init.sh`
+- Evidence captured:
+  - All four containers `Up`; `db` and `withdrawal-soles` report healthy.
+  - `GET /health`: 200 `{"status":"ok"}`; `/docs`: 200; Traefik dashboard: 200.
+  - Tables: `withdrawal_operations`, `withdrawal_status_history`, `idempotency_records`, `reporting_attempts`, `alembic_version`; migration `0002_add_wallet_integration`.
+  - Contract check: 11/11 checks passed; withdrawal `a8c94465-7653-4883-9130-e3ad3e9dea02` completed, reversed, and balance restored `25000 -> 24000 -> 25000` cents.
+- Commits: docs(progress): record local stack bring-up
+- Files or artifacts updated: `progress.md`, `session-handoff.md`
+- Known risk or unresolved issue: the local stack is for development only; the AWS practice stack remains destroyed.
+- Next best step: use `localhost:8080` for development, or re-apply the AWS stack only when the gateway is needed.

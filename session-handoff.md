@@ -14,8 +14,9 @@
 - The AWS practice stack is **destroyed**. The 2026-11-06 teardown removed the
   platform, the infra module (41 resources), the ECR image, and the EKS log
   group; both Terraform states are empty and no billable resources remain.
-- The local Docker Compose stack is running and healthy; `localhost:8080`
-  serves the API through Traefik.
+- The local Docker Compose stack was rebuilt and is running and healthy;
+  `localhost:8080` serves the API through Traefik and the HTTP contract check
+  passes 11/11.
 
 ## Changed This Session
 
