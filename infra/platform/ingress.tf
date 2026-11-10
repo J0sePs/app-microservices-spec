@@ -42,6 +42,34 @@ resource "kubernetes_ingress_v1" "gateway" {
         }
 
         path {
+          path      = "/usuarios"
+          path_type = "Prefix"
+
+          backend {
+            service {
+              name = kubernetes_service_v1.mock.metadata[0].name
+              port {
+                number = 8001
+              }
+            }
+          }
+        }
+
+        path {
+          path      = "/v1/"
+          path_type = "Prefix"
+
+          backend {
+            service {
+              name = kubernetes_service_v1.mock.metadata[0].name
+              port {
+                number = 8001
+              }
+            }
+          }
+        }
+
+        path {
           path      = "/api/v1/withdrawals"
           path_type = "Prefix"
 

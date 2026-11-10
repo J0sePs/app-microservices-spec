@@ -133,6 +133,11 @@ resource "kubernetes_deployment_v1" "app" {
           }
 
           env {
+            name  = "WITHDRAWAL_SOLES_WALLET_SERVICE_URL"
+            value = "http://${local.gateway_service}"
+          }
+
+          env {
             name  = "WITHDRAWAL_SOLES_BUSINESS_TIMEZONE"
             value = "America/Lima"
           }

@@ -50,7 +50,9 @@ terraform output application_namespace
 
 The gateway URL is the Traefik LoadBalancer. The application is reachable at
 `/docs`, `/health`, and `/api/v1/withdrawals`; the mock is reachable only through
-the gateway paths `/api/v1/accounts` and `/api/v1/transactions`.
+the gateway paths `/api/v1/accounts`, `/api/v1/transactions`, `/usuarios`, and
+`/v1/` (wallet). The deployment points the user, transaction, and wallet
+service URLs at the in-cluster Traefik service, so the demo is self-contained.
 
 ## Apply order
 
