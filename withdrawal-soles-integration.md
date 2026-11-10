@@ -492,7 +492,7 @@ El ERD completo está en
 El acuerdo de integración con la billetera PEN está implementado en esta
 versión: retiros resuelve `id_usuario` desde `user-service`, debita la billetera
 en céntimos y permite revertir el débito completo. El detalle histórico está en
-[`ACUERDO-INTEGRACION-BILLETERA.md`](ACUERDO-INTEGRACION-BILLETERA.md).
+[`ACUERDO-INTEGRACION-BILLETERA.md`](temp/ACUERDO-INTEGRACION-BILLETERA.md).
 
 ## Práctica local
 

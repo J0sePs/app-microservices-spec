@@ -577,3 +577,24 @@ chat history is not.
 - Files or artifacts updated: `postman/withdrawal-soles-billetera.postman_collection.json`, `postman/README.md`, `README.md`, `progress.md`, `session-handoff.md`
 - Known risk or unresolved issue: the local wallet stub only implements a subset of the friend's API, so the full wallet folder must run against `http://52.67.162.209`.
 - Next best step: share the collection with the teammate and adjust `wallet_user_id`/`wallet_id` to their test data.
+
+### Session 022
+
+- Date: 2026-11-10
+- Goal: Publish the integration drafts that had been moved to `temp/`.
+- Completed:
+  - Committed the move of `ACUERDO-INTEGRACION-BILLETERA.md` and the four
+    `PARA-*` drafts into `temp/`, so the repository matches the working tree.
+  - Updated the two remaining links to the wallet agreement so they point at
+    `temp/ACUERDO-INTEGRACION-BILLETERA.md`.
+- Verification run:
+  - `git status --short` confirms only the intended move and link edits.
+  - `./init.sh` passed.
+- Evidence captured:
+  - `temp/` contains the five integration documents; no Terraform state,
+    `.tfvars`, `.env`, or AWS credentials were staged.
+- Commits: `docs: move integration drafts to temp`
+- Files or artifacts updated: `temp/`, `service-reference.md`,
+  `withdrawal-soles-integration.md`, `progress.md`
+- Known risk or unresolved issue: none.
+- Next best step: keep new drafts in `docs/` or `temp/`, never in the root.
