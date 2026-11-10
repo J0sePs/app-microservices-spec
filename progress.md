@@ -598,3 +598,34 @@ chat history is not.
   `withdrawal-soles-integration.md`, `progress.md`
 - Known risk or unresolved issue: none.
 - Next best step: keep new drafts in `docs/` or `temp/`, never in the root.
+
+### Session 023
+
+- Date: 2026-11-10
+- Goal: Tear down the AWS practice stack to stop billing.
+- Completed:
+  - Ran `./scripts/destroy-eks-demo.sh`, which destroyed `infra/platform`
+    first (9 resources: Traefik, namespaces, app/mock deployments, services,
+    secret, migration job, ingress), removed the `withdrawal-soles` namespace
+    and its Classic LoadBalancer, deleted the ECR images, then destroyed
+    `infra/terraform` (41 resources: EKS, node group, RDS, ECR, VPC, NAT, IGW,
+    subnets, IAM, SGs), and deleted the EKS CloudWatch log group.
+- Verification run:
+  - `terraform -chdir=infra/terraform state list` and
+    `terraform -chdir=infra/platform state list`: both empty.
+  - AWS CLI post-destroy sweep in `us-east-1`: no EKS clusters, RDS
+    instances, ECR repositories, tagged VPCs, NAT gateways, ELB/ALB, tagged
+    EBS volumes, tagged security groups, or `/aws/eks` log groups.
+  - `./init.sh` — VERIFICATION PASSED.
+- Evidence captured:
+  - `infra/platform`: `Destroy complete! Resources: 9 destroyed`.
+  - `infra/terraform`: `Destroy complete! Resources: 41 destroyed`.
+  - The only remaining Elastic IP, `32.199.142.201`, is tagged
+    `machupicchu-eip` and is unrelated to this stack; it was left untouched.
+- Commits: (this session)
+- Files or artifacts updated: `progress.md`, `session-handoff.md`,
+  `feature_list.json`
+- Known risk or unresolved issue: local Docker Compose stack and the external
+  Billetera PEN dependency are unaffected; no AWS compute remains.
+- Next best step: redeploy with `terraform -chdir=infra/terraform apply` and
+  `./scripts/deploy-eks-demo.sh` only when a practice run is needed.

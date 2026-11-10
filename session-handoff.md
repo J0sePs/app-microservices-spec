@@ -11,14 +11,15 @@
   - HTTP checker against the compose stack: 11/11 checks with the balance
     restored.
   - `openspec validate --all --strict`: 8 passed, 0 failed.
-- The AWS practice stack is **up**:
-  - `infra/terraform`: 41 resources — VPC, NAT, EKS 1.35 with 2 `t3.small`
-    nodes, ECR, private RDS PostgreSQL 15 (`db.t4g.micro`), IAM, SGs.
-  - `infra/platform`: Traefik gateway, namespace, DB secret, Alembic job, two
-    app replicas, mock dependencies, ingress. Image `28b1e55`.
-  - Gateway: `http://a0f4e669772d6496a9125e3de34cffbc-795710705.us-east-1.elb.amazonaws.com`
+- The AWS practice stack is **destroyed** (2026-11-10):
+  - `./scripts/destroy-eks-demo.sh` destroyed `infra/platform` (9 resources)
+    and `infra/terraform` (41 resources); both Terraform states are empty.
+  - No EKS, RDS, ECR, VPC, NAT, ELB, EBS, or EKS log group remains in
+    `us-east-1`. The remaining EIP `32.199.142.201` is tagged
+    `machupicchu-eip` and unrelated.
 - The published Billetera Digital PEN API v1.1.0
-  (`http://52.67.162.209`) is consumed end to end through the AWS gateway:
+  (`http://52.67.162.209`) was consumed end to end through the AWS gateway
+  before teardown:
   - Contract check: 11/11.
   - Withdrawal `74e2f8e7-a36e-417d-b781-1af20d15ada9`: payment debit
     `7bc4cef5-9a05-49af-8bc0-f51eb3d6a325`, reversal credit
@@ -50,8 +51,8 @@
 
 ## Broken Or Unverified
 
-- The AWS stack costs roughly $157/month while it runs. Destroy it when the
-  practice run ends.
+- The AWS practice stack is torn down; redeploy it only for a practice run and
+  destroy it again afterwards (~$157/month while it runs).
 - The published wallet is an external dependency; its availability gates
   withdrawals.
 - The gateway is public and has no edge authentication; the service trusts
@@ -75,9 +76,12 @@
      --wallet-url http://52.67.162.209
    ```
 
-3. Stop AWS charges after the practice run:
+3. Redeploy AWS only when needed, then stop charges afterwards:
 
    ```bash
+   terraform -chdir=infra/terraform apply
+   ./scripts/deploy-eks-demo.sh
+   # ... practice ...
    ./scripts/destroy-eks-demo.sh
    ```
 
