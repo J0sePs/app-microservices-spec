@@ -29,6 +29,11 @@
 
 ## Changed This Session
 
+- `README.md` now documents only `withdrawal-soles`: responsibilities, domain
+  rules, HTTP contract, local commands, and the `withdrawal_soles_db` ERD with
+  its constraints and status lifecycle.
+- The repository is published to `J0sePs/app-microservices-spec`; `origin/main`
+  includes the full local history after an `--allow-unrelated-histories` merge.
 - The generated contract now lives at `api/openapi.yaml`; `make openapi` writes
   there. It reflects 7 operations, `BearerAuth`, the current gateway URL, and
   the published wallet dependency.

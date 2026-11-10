@@ -534,3 +534,23 @@ chat history is not.
 - Files or artifacts updated: `api/openapi.yaml`, `api/openapi-service2.yaml`, `scripts/export_openapi.py`, `src/withdrawal_soles/core/settings.py`, `.env.example`, `docs/withdrawal-soles.md`, `service-reference.md`, `withdrawal-soles-integration.md`, `ACUERDO-INTEGRACION-BILLETERA.md`, `scripts/wallet_contract_check.py`, `scripts/simulate_wallet_integration.py`, `infra/platform/app.tf`, `infra/platform/variables.tf`, `infra/platform/README.md`, `progress.md`, `session-handoff.md`
 - Known risk or unresolved issue: the published wallet is an external dependency outside our control; its availability gates withdrawals. The shared development JWT secret is still 18 bytes.
 - Next best step: send `api/openapi.yaml` to the wallet team and keep `wallet_service_url` configurable per environment.
+
+### Session 020
+
+- Date: 2026-11-10
+- Goal: Rewrite the root README around the single implemented service and publish it to GitHub.
+- Completed:
+  - Rewrote `README.md` to scope the repository to `withdrawal-soles` only: responsibilities, domain rules, tech stack, HTTP contract, local commands, and AWS infrastructure.
+  - Embedded the owned-database ERD (`withdrawal_soles_db`) with constraints and the status lifecycle.
+  - Removed the broken link to the moved `ACUERDO-INTEGRACION-BILLETERA.md` and pointed documentation at existing files.
+  - Added `origin` (`J0sePs/app-microservices-spec`) and merged the remote initial history with `--allow-unrelated-histories` (`-X ours`), then pushed `main`.
+- Verification run:
+  - `./init.sh` — VERIFICATION PASSED (5/5 subsystems, 106 tests).
+  - `git push -u origin main` — `77e4296..47c5b04`.
+- Evidence captured:
+  - README renders an `erDiagram` for `withdrawal_operations`, `withdrawal_status_history`, `idempotency_records`, and `reporting_attempts`.
+  - Remote `main` now contains the local history.
+- Commits: `81d37b5 docs(readme): focus on withdrawal-soles with ERD and service details`, merge commit `chore: merge remote initial OpenSpec history`
+- Files or artifacts updated: `README.md`, `progress.md`, `session-handoff.md`
+- Known risk or unresolved issue: the five moved integration drafts remain deleted in the working tree (`temp/` is untracked) and were not committed; `service-reference.md` and `withdrawal-soles-integration.md` still link to `ACUERDO-INTEGRACION-BILLETERA.md`.
+- Next best step: decide whether to restore or permanently remove the moved integration drafts and fix their remaining links.
