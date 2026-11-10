@@ -1,59 +1,226 @@
-# app-nube-2 — Banking Microservices
+# withdrawal-soles — Microservicio de retiros en soles
 
-Banking platform built as independent microservices for PEN (soles) and USD
-(dollars) operations. This repository is the home of the **withdrawal-soles**
-service and the system architecture that surrounds it.
+PEN withdrawal microservice for the banking platform: it validates ownership,
+debits the external PEN wallet, persists the operation lifecycle, and reports
+approved withdrawals to the transaction ledger.
 
-## Scope
+> **This repository contains exactly one service: `withdrawal-soles`.**
+> The rest of the platform (`user`, `deposit`, `transaction`, and the USD
+> variants) is out of scope here and is documented in
+> [`openspec/architecture/`](openspec/architecture/).
 
-The full platform covers four domains — `user`, `deposit`, `withdrawal`, and
-`transaction` — split by currency into independently deployable services:
+## Service details
 
-| Service | Responsibility | Owned database |
-| --- | --- | --- |
-| `user-service` | Customer and account management | `user_db` |
-| `deposit-soles` | PEN deposits | `deposit_soles_db` |
-| `deposit-dollars` | USD deposits | `deposit_dollars_db` |
-| `withdrawal-soles` | PEN withdrawals (this repository) | `withdrawal_soles_db` |
-| `withdrawal-dollars` | USD withdrawals | `withdrawal_dollars_db` |
-| `transaction-service` | Unified transaction history | `transaction_db` |
+| Item | Value |
+| --- | --- |
+| Service | `withdrawal-soles` |
+| Domain | Withdrawals in Peruvian soles (`PEN`) |
+| Owned database | `withdrawal_soles_db` |
+| Python package | `withdrawal_soles` |
+| Local gateway | `http://localhost:8080` (Traefik) |
+| Service port inside Docker | `8000` |
+| Swagger UI | `http://localhost:8080/docs` |
+| Health check | `http://localhost:8080/health` |
+
+### Responsibilities
+
+- Create PEN withdrawals with `S/ 10.00` minimum, `S/ 5,000.00` maximum, and a
+  `S/ 10,000.00` daily accumulated limit per account.
+- Validate account ownership, currency, and status through `user-service`.
+- Require a service JWT on every business route and `X-User-Id` for the
+  end-user identity.
+- Validate the wallet owner through `GET /usuarios/{idUsuario}` before a debit
+  or a reversal.
+- Debit the external PEN wallet, which is the sole owner of the balance, and
+  persist the wallet and movement identifiers.
+- Reverse the full wallet debit through a compensating movement.
+- Enforce `Idempotency-Key` on mutations.
+- Persist an auditable lifecycle, idempotency records, and reporting attempts.
+- Report approved operations to `transaction-service`.
+
+### Domain rules
+
+- Only `PEN` operations are processed.
+- Minimum amount per operation: `S/ 10.00`.
+- Maximum amount per operation: `S/ 5,000.00`.
+- Daily accumulated limit per account: `S/ 10,000.00`, measured over the
+  current `America/Lima` day.
+- Statuses: `PENDING`, `APPROVED`, `REJECTED`, `COMPLETED`, `REVERSED`,
+  `FAILED`.
+- Every approved operation is reported to `transaction-service` over HTTP.
 
 ## Tech stack
 
 - Python 3.11+ with FastAPI
 - PostgreSQL 15 with SQLAlchemy 2.0 async and Alembic
+- Hexagonal layout: `api/`, `application/`, `core/`, `domain/`,
+  `infrastructure/`
 - Docker and Docker Compose
 - Traefik v3 as the API gateway
 - pytest and httpx for testing
 - GitHub Actions for CI/CD
-- Terraform for AWS infrastructure (EKS cluster)
+- Terraform on AWS (EKS) for the target infrastructure
 
-## Architecture
+## HTTP contract
 
-Architecture documentation lives in `openspec/architecture/` and is the source
-of truth for humans and agents. It includes a system-level mermaid diagram and
-one ERD per microservice.
+Every business request requires `Authorization: Bearer <jwt>` (HS256, issuer
+`billetera-dev`, subject `retiros`) and the end-user `X-User-Id` header (a
+UUID). Every mutating request also requires `Idempotency-Key`. `/health`,
+`/docs`, `/openapi.json`, and `/` are public.
 
-## withdrawal-soles service
+| Method | Path | Headers | Success |
+| --- | --- | --- | --- |
+| `POST` | `/api/v1/withdrawals` | `Authorization`, `X-User-Id`, `Idempotency-Key` | `201` created; `200` on idempotent replay |
+| `GET` | `/api/v1/withdrawals` | `Authorization`, `X-User-Id` | `200` paginated list |
+| `GET` | `/api/v1/withdrawals/{id}` | `Authorization`, `X-User-Id` | `200` owned operation |
+| `POST` | `/api/v1/withdrawals/{id}/cancel` | `Authorization`, `X-User-Id`, `Idempotency-Key` | `200` rejected operation |
+| `POST` | `/api/v1/withdrawals/{id}/reverse` | `Authorization`, `X-User-Id`, `Idempotency-Key`, reason JSON | `200` reversed operation |
+| `POST` | `/api/v1/withdrawals/{id}/report` | `Authorization`, `X-User-Id`, `Idempotency-Key` | `200` completed; `202` reporting still pending |
+| `GET` | `/health` | none | `200` ready; `503` database unavailable |
 
-The only implemented service in this repository is `withdrawal-soles`. See
-[docs/withdrawal-soles.md](docs/withdrawal-soles.md) for setup, API examples,
-migrations, and Docker Compose instructions. For current URLs, endpoints, and
-the ERD, see [service-reference.md](service-reference.md). For the
-cross-team integration contract, see
-[withdrawal-soles-integration.md](withdrawal-soles-integration.md). The wallet
-integration agreement and its implementation notes are in
-[ACUERDO-INTEGRACION-BILLETERA.md](ACUERDO-INTEGRACION-BILLETERA.md).
+Errors use the envelope:
+
+```json
+{
+  "code": "DAILY_LIMIT_EXCEEDED",
+  "message": "The daily withdrawal limit was exceeded.",
+  "details": {
+    "accumulated": "9900.00",
+    "requested": "200.00",
+    "limit": "10000.00"
+  }
+}
+```
+
+### Example
 
 ```bash
-make install && make verify   # Python service checks
+TOKEN=$(.venv/bin/python -c "from withdrawal_soles.infrastructure.service_jwt import sign_service_token; print(sign_service_token(secret='dev-only-change-me', issuer='billetera-dev', subject='retiros', ttl_seconds=3600))")
+
+curl -i -X POST http://localhost:8080/api/v1/withdrawals \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "X-User-Id: 9d1e2f3a-4b5c-6d7e-8f90-1a2b3c4d5e6f" \
+  -H "Idempotency-Key: demo-1" \
+  -d '{"account_id":"1c7a5e0e-4f4a-4a1f-9a3e-7b9f0d2a6c11","amount":"250.00"}'
+```
+
+## Entity-relationship diagram
+
+**Owned database:** `withdrawal_soles_db`
+
+```mermaid
+erDiagram
+    WITHDRAWAL_OPERATIONS ||--o{ WITHDRAWAL_STATUS_HISTORY : has
+    WITHDRAWAL_OPERATIONS ||--o{ REPORTING_ATTEMPTS : retries
+    WITHDRAWAL_OPERATIONS ||--|| IDEMPOTENCY_RECORDS : keyed_by
+
+    WITHDRAWAL_OPERATIONS {
+        uuid id PK
+        uuid account_id "external ref: user_db.accounts.id"
+        uuid user_id "external ref: user_db.users.id"
+        int wallet_user_id "external ref: wallet idUsuario"
+        uuid wallet_id "external ref: wallet wallets.id"
+        uuid wallet_movement_id "external ref: wallet movements.id"
+        uuid wallet_reversal_movement_id "external ref: wallet movements.id"
+        numeric amount "10.00 to 5000.00"
+        string currency "PEN"
+        string status "PENDING, APPROVED, REJECTED, COMPLETED, REVERSED, or FAILED"
+        timestamp wallet_debited_at
+        timestamp wallet_reversed_at
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    WITHDRAWAL_STATUS_HISTORY {
+        uuid id PK
+        uuid withdrawal_id FK
+        string from_status
+        string to_status
+        string reason
+        timestamp created_at
+    }
+
+    IDEMPOTENCY_RECORDS {
+        uuid id PK
+        string idempotency_key UK "unique key"
+        string request_hash
+        uuid withdrawal_id FK
+        jsonb response_snapshot
+        timestamp created_at
+    }
+
+    REPORTING_ATTEMPTS {
+        uuid id PK
+        uuid withdrawal_id FK
+        int attempt_number
+        string status "PENDING, SENT, or FAILED"
+        string transaction_id "external ref: transaction_db.transactions.id"
+        string error_message
+        timestamp created_at
+    }
+```
+
+### Constraints
+
+- `withdrawal_operations.amount` is between `10.00` and `5000.00` PEN.
+- `withdrawal_operations.currency` is restricted to `PEN`.
+- `withdrawal_operations.status` is one of `PENDING`, `APPROVED`, `REJECTED`,
+  `COMPLETED`, `REVERSED`, or `FAILED`.
+- `withdrawal_operations.wallet_user_id`, `wallet_id`, `wallet_movement_id`, and
+  `wallet_reversal_movement_id` are external references to the PEN wallet; they
+  are stored as values, not database foreign keys.
+- `withdrawal_status_history.withdrawal_id` and
+  `reporting_attempts.withdrawal_id` reference `withdrawal_operations.id`
+  inside the same database.
+- `reporting_attempts` is unique on `(withdrawal_id, attempt_number)`.
+- `idempotency_records.idempotency_key` is unique.
+- `withdrawal_operations.account_id` references `user_db.accounts.id`.
+- `withdrawal_operations.user_id` references `user_db.users.id`.
+- `reporting_attempts.transaction_id` references
+  `transaction_db.transactions.id`.
+
+External references are stored as values, not database foreign keys, because
+each service owns its own database and never reads another service's data.
+
+### Status lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING
+    PENDING --> APPROVED
+    PENDING --> REJECTED
+    APPROVED --> COMPLETED
+    APPROVED --> FAILED
+    APPROVED --> REVERSED
+    COMPLETED --> REVERSED
+    REJECTED --> [*]
+    COMPLETED --> [*]
+    FAILED --> [*]
+    REVERSED --> [*]
+```
+
+## Local setup
+
+```bash
+make install && make verify   # create .venv, run ruff and pytest
 docker compose up --build      # PostgreSQL + Traefik + service + local stubs
 make contract-check            # HTTP JWT + debit + reversal check
 ```
 
-All business calls require `Authorization: Bearer <jwt>` and `X-User-Id`; see
-[docs/withdrawal-soles.md](docs/withdrawal-soles.md#api-examples) for the
-development token command.
+Useful commands:
+
+| Command | Purpose |
+| --- | --- |
+| `make run` | Run uvicorn on `http://localhost:8000` |
+| `make test` | Run pytest |
+| `make lint` | Run ruff |
+| `make migrate` | Apply Alembic migrations |
+| `make openapi` | Regenerate `api/openapi.yaml` |
+| `make simulate` | Simulate the wallet integration |
+
+Settings use the `WITHDRAWAL_SOLES_` prefix; see `.env.example` and
+[docs/withdrawal-soles.md](docs/withdrawal-soles.md#configuration).
 
 ## AWS infrastructure
 
@@ -72,6 +239,15 @@ A credentialed `terraform plan` is expected before any approved apply. After an
 approved apply, `./scripts/deploy-eks-demo.sh` builds and pushes the image and
 applies the platform module. Tear it down with `./scripts/destroy-eks-demo.sh`.
 This repository does not create AWS resources automatically.
+
+## Documentation
+
+- [Service reference: URLs, contract, and ERD](service-reference.md)
+- [Service guide: setup, migrations, and examples](docs/withdrawal-soles.md)
+- [Cross-team integration contract](withdrawal-soles-integration.md)
+- [OpenAPI contract](api/openapi.yaml)
+- [Architecture ERD](openspec/architecture/erd/withdrawal-soles.md)
+- [System architecture](openspec/architecture/README.md)
 
 ## Spec-driven workflow
 
