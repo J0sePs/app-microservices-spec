@@ -688,3 +688,46 @@ chat history is not.
   Billetera PEN API, because the latter is down.
 - Next best step: run `./scripts/destroy-eks-demo.sh` when the practice run
   ends; restore the published wallet URL afterwards once it is reachable.
+
+### Session 025
+
+- Date: 2026-11-13
+- Goal: Prepare CI/CD from GitHub Actions to the shared EKS cluster, where the
+  service consumes `billetera-api` (namespace `billetera`, port `3000`).
+- Completed:
+  - Created OpenSpec change `cicd-eks-deploy` (proposal, design, tasks, deltas
+    for `continuous-delivery`, `aws-platform-infrastructure`, and
+    `eks-application-platform`) and feature `cicd-001` (`in_progress`).
+  - `.github/workflows/verify.yml`: `checks` (`make lint`, `make test`,
+    `make openapi-check`), `verify` (`./init.sh`), `terraform`, and, on `main`
+    with `EKS_DEPLOY_ENABLED=true`, `image` (ECR `<sha>` + `latest`) and
+    `deploy` (`terraform apply` on `infra/platform`, kubeconfig, rollout,
+    image check, `/health`).
+  - S3 backend for both roots (`scripts/bootstrap-tf-state.sh`,
+    `scripts/tf-init.sh`); platform reads infra state from S3.
+  - ECR `IMMUTABLE_WITH_EXCLUSION` for `latest`, lifecycle policy,
+    `ecr_repository_name` output, optional `cluster_admin_principal_arns`.
+  - Platform: wallet default `http://billetera-api.billetera.svc.cluster.local:3000`,
+    `wallet_mock_enabled`, `mock_dependencies_enabled`, `withdrawal-jwt`
+    Secret with issuer `billetera-dev`.
+  - Supporting fix: indentation in `openspec/config.yaml` (OpenSpec ignored
+    the file).
+- Verification run:
+  - `./scripts/verify-terraform.sh`, `make verify` (106 passed),
+    `make openapi-check` (OK; injected drift exits 2),
+    `openspec validate --all --strict` (9/9), `./init.sh` (PASSED).
+  - `terraform console` for the three toggle combinations.
+  - Read-only `terraform plan` of the new code against the live local states
+    (scratch copy, `-lock=false`): infra `1 add, 1 change, 0 destroy`;
+    platform with `wallet_mock_enabled=true` `2 add, 1 change, 0 destroy`
+    (JWT Secret, migration Job re-run, Deployment env; mock moved to `[0]`;
+    Ingress unchanged).
+- Evidence captured: see `cicd-001` in `feature_list.json`.
+- Commits: `feat(cicd): deploy main to the shared EKS cluster from GitHub Actions`
+  on branch `feature/cicd-eks-deploy`.
+- Known risk or unresolved issue: the live stack still uses local state; the
+  next apply needs `scripts/tf-init.sh <module> -migrate-state`. `billetera`
+  namespace does not exist yet, so deploys need `WALLET_MOCK_ENABLED=true`.
+  `actionlint` was not run (blocked by the local permission policy).
+- Next best step: bootstrap the state bucket, migrate both states, register the
+  GitHub secrets and variables, merge the PR, and confirm the first CI deploy.

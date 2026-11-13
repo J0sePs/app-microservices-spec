@@ -43,10 +43,23 @@
   services. Production must inject a strong secret in every deployment.
 - The real users-service URL is not published; the deployment uses the
   in-cluster mock through the gateway.
-- Terraform uses local state; an S3 backend with locking is required for shared
-  use.
+- The code on `feature/cicd-eks-deploy` moves both roots to an S3 backend, but
+  the live stack still has **local** state. Before the next apply:
+  `./scripts/bootstrap-tf-state.sh`, export `TF_STATE_BUCKET`, then
+  `./scripts/tf-init.sh terraform -migrate-state` and
+  `./scripts/tf-init.sh platform -migrate-state`.
+- `cicd-001` is `in_progress`: no CI deploy has run yet; `actionlint` not run.
+- The `billetera` namespace does not exist in the cluster yet; deploys need
+  `WALLET_MOCK_ENABLED=1` (script) or the GitHub variable
+  `WALLET_MOCK_ENABLED=true`.
 
 ## Next Best Step
+
+0. CI/CD (`cicd-001`): merge the `feature/cicd-eks-deploy` PR after
+   registering the GitHub secrets (`AWS_ACCESS_KEY_ID`,
+   `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `DB_PASSWORD`, `JWT_SECRET`) and
+   variables (`TF_STATE_BUCKET`, `EKS_DEPLOY_ENABLED`, `WALLET_MOCK_ENABLED`),
+   then confirm the first deploy and archive `cicd-eks-deploy`.
 
 1. When the practice run ends, stop billing:
 
@@ -96,7 +109,8 @@ curl http://localhost:8080/docs
 
 # AWS deployment
 terraform -chdir=infra/terraform apply
-WALLET_SERVICE_URL=http://traefik.traefik.svc.cluster.local ./scripts/deploy-eks-demo.sh
+export TF_STATE_BUCKET=<bucket> AWS_REGION=us-east-1
+JWT_SECRET='<shared-with-billetera-api>' WALLET_MOCK_ENABLED=1 ./scripts/deploy-eks-demo.sh
 terraform -chdir=infra/platform output -raw gateway_url
 kubectl -n withdrawal-soles get pods,svc,ingress
 

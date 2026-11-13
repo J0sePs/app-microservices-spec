@@ -33,7 +33,7 @@
 
 - [x] 7.1 Run `./scripts/verify-terraform.sh`, `make verify`, `make openapi-check`, `openspec validate --all --strict`, and `./init.sh`; verify all pass.
 - [ ] 7.2 Bootstrap the state bucket, apply the infra module, register the GitHub secrets and variables, push to `main`, and confirm the image, rollout, and `/health` through the gateway (requires AWS; pending until the stack is re-created).
-- [ ] 7.3 Record evidence in `feature_list.json`, update `progress.md` and `session-handoff.md`.
+- [x] 7.3 Record evidence in `feature_list.json`, update `progress.md` and `session-handoff.md`.
 
 ## Workflow follow-up
 
