@@ -49,10 +49,14 @@
   before any Terraform command; the local `terraform.tfstate` files are empty.
   The code on `main` before the PR merge still declares the local backend; do
   not run Terraform from `main` until the PR is merged.
-- `infra/terraform` is not yet applied with the new code: the ECR lifecycle
-  policy, `latest` exclusion, and the `ecr_repository_name`/`aws_region`
-  outputs are missing until `terraform -chdir=infra/terraform apply`
-  (plan: 1 add, 1 change, 0 destroy). The CI `image` job needs those outputs.
+- `infra/terraform` is applied with the new code (3 added, 1 changed): ECR
+  `IMMUTABLE_WITH_EXCLUSION` for `latest`, lifecycle policy, and a cluster-admin
+  access entry for `github-actions-withdrawal-soles`.
+- GitHub is configured: secrets `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+  (CI user key), `AWS_REGION`, `DB_PASSWORD`, `JWT_SECRET`
+  (`dev-only-change-me`); variables `TF_STATE_BUCKET`,
+  `WALLET_MOCK_ENABLED=true`. `EKS_DEPLOY_ENABLED` is not set, so merges only
+  verify until it is set to `true`.
 - `cicd-001` is `in_progress`: no CI deploy has run yet; `actionlint` not run.
 - The `billetera` namespace does not exist in the cluster yet; deploys need
   `WALLET_MOCK_ENABLED=1` (script) or the GitHub variable

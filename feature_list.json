@@ -253,9 +253,13 @@
         "api/openapi.yaml covers 7 operations incl. /cancel, /reverse, /report, /health; X-User-Id and Idempotency-Key required; BearerAuth; ErrorResponse",
         ".github/workflows/verify.yml parses (jobs checks, verify, terraform, image, deploy); node scripts/validate-harness.mjs 16/16; actionlint not run (blocked by local permission policy)",
         "openspec validate --all --strict: 9 passed, 0 failed; ./init.sh VERIFICATION PASSED",
-        "Live CI deploy not yet run: needs the S3 bucket, migration of the live local states, and GitHub secrets/variables"
+        "PR #2 checks on GitHub: Harness + OpenSpec, Terraform, and Lint, tests, OpenAPI passed; image and deploy skipped on pull_request",
+        "2026-11-13 state migrated to s3://app-nube-2-tfstate-205346659030 (infra 45 entries, platform 12 via S3)",
+        "2026-11-13 infra apply: 3 added, 1 changed, 0 destroyed; ECR IMMUTABLE_WITH_EXCLUSION (latest); access entry AmazonEKSClusterAdminPolicy for github-actions-withdrawal-soles",
+        "GitHub secrets AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, DB_PASSWORD, JWT_SECRET and variables TF_STATE_BUCKET, WALLET_MOCK_ENABLED registered; CI key verified against S3 state, ECR, and EKS",
+        "Live CI deploy not yet run: set EKS_DEPLOY_ENABLED=true and merge PR #2"
       ],
-      "notes": "Code and docs complete; feature stays in_progress until a push to main deploys through CI. The live stack (2026-11-13) still uses local state; migrate it with scripts/tf-init.sh <module> -migrate-state before the next apply."
+      "notes": "Infra, state, and GitHub configuration are ready; the feature passes after the first CI deploy on main."
     }
   ]
 }

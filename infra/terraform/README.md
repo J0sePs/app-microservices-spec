@@ -222,8 +222,13 @@ WALLET_MOCK_ENABLED=1 ./scripts/deploy-eks-demo.sh
 repository variable `EKS_DEPLOY_ENABLED` is `true`. CI never applies this
 module; it reads `ecr_repository_url`, `ecr_repository_name`, and
 `eks_cluster_name` from the S3 state, pushes the image, and applies
-`infra/platform`. If the CI IAM user is not the identity that created the
-cluster, add its ARN to `cluster_admin_principal_arns` and apply.
+`infra/platform`. The CI identity is the least-privilege IAM user created by
+`scripts/bootstrap-ci-user.sh` (ECR push for this repository,
+`eks:DescribeCluster`, and the state objects in S3). Add its ARN to
+`cluster_admin_principal_arns`, apply, then run
+`scripts/bootstrap-ci-user.sh --create-key`, which stores the access key in the
+GitHub secrets without printing it. Like the state bucket, the user survives
+`destroy-eks-demo.sh`.
 
 ## Destroy
 

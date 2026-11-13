@@ -740,3 +740,14 @@ chat history is not.
   `1 to add, 1 to change, 0 to destroy` (not applied). Registered the GitHub
   variable `TF_STATE_BUCKET`. Documented that `-force-copy` is required for the
   one-time migration because `tf-init.sh` runs with `-input=false`.
+- Follow-up (same session): created the least-privilege IAM user
+  `github-actions-withdrawal-soles` with `scripts/bootstrap-ci-user.sh`
+  (inline policy: ECR push for this repository, `eks:DescribeCluster`, S3 state
+  objects), added it to `cluster_admin_principal_arns` in the ignored
+  `terraform.tfvars`, and applied `infra/terraform` from a saved plan:
+  `Apply complete! Resources: 3 added, 1 changed, 0 destroyed`. ECR now reports
+  `IMMUTABLE_WITH_EXCLUSION` with the `latest` wildcard. The CI key was created
+  and stored straight into GitHub secrets; with that key, S3 state, ECR, and
+  `eks describe-cluster` (ACTIVE) succeed. Stored `AWS_REGION`, `DB_PASSWORD`
+  (from the ignored tfvars), `JWT_SECRET`, and the variable
+  `WALLET_MOCK_ENABLED=true`. `EKS_DEPLOY_ENABLED` is intentionally unset.
