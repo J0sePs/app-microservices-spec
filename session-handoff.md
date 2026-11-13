@@ -43,11 +43,16 @@
   services. Production must inject a strong secret in every deployment.
 - The real users-service URL is not published; the deployment uses the
   in-cluster mock through the gateway.
-- The code on `feature/cicd-eks-deploy` moves both roots to an S3 backend, but
-  the live stack still has **local** state. Before the next apply:
-  `./scripts/bootstrap-tf-state.sh`, export `TF_STATE_BUCKET`, then
-  `./scripts/tf-init.sh terraform -migrate-state` and
-  `./scripts/tf-init.sh platform -migrate-state`.
+- Both states now live in S3 (`s3://app-nube-2-tfstate-205346659030`, keys
+  `withdrawal-soles/infra.tfstate` and `withdrawal-soles/platform.tfstate`,
+  migrated 2026-11-13). Export `TF_STATE_BUCKET` and `AWS_REGION=us-east-1`
+  before any Terraform command; the local `terraform.tfstate` files are empty.
+  The code on `main` before the PR merge still declares the local backend; do
+  not run Terraform from `main` until the PR is merged.
+- `infra/terraform` is not yet applied with the new code: the ECR lifecycle
+  policy, `latest` exclusion, and the `ecr_repository_name`/`aws_region`
+  outputs are missing until `terraform -chdir=infra/terraform apply`
+  (plan: 1 add, 1 change, 0 destroy). The CI `image` job needs those outputs.
 - `cicd-001` is `in_progress`: no CI deploy has run yet; `actionlint` not run.
 - The `billetera` namespace does not exist in the cluster yet; deploys need
   `WALLET_MOCK_ENABLED=1` (script) or the GitHub variable

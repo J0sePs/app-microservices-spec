@@ -731,3 +731,12 @@ chat history is not.
   `actionlint` was not run (blocked by the local permission policy).
 - Next best step: bootstrap the state bucket, migrate both states, register the
   GitHub secrets and variables, merge the PR, and confirm the first CI deploy.
+- Follow-up (same session): created `s3://app-nube-2-tfstate-205346659030`
+  with `scripts/bootstrap-tf-state.sh` (versioning, AES256, public access
+  block), backed up both local states, and migrated them with
+  `scripts/tf-init.sh <module> -migrate-state -force-copy`. Verified the S3
+  objects and `terraform state list` through S3 (infra 45 entries, platform
+  12); the local state files are now empty. Credentialed plan through S3:
+  `1 to add, 1 to change, 0 to destroy` (not applied). Registered the GitHub
+  variable `TF_STATE_BUCKET`. Documented that `-force-copy` is required for the
+  one-time migration because `tf-init.sh` runs with `-input=false`.

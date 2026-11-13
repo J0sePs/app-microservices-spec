@@ -144,8 +144,8 @@ The apply only manages resources declared in `infra/platform`: the
 
 1. Run `scripts/bootstrap-tf-state.sh` once.
 2. Export `TF_STATE_BUCKET`, then run `scripts/tf-init.sh terraform` and
-   `scripts/tf-init.sh platform` (add `-migrate-state` once if a local state
-   still exists).
+   `scripts/tf-init.sh platform` (add `-migrate-state -force-copy` once if a
+   local state still exists and the S3 key is empty).
 3. `terraform -chdir=infra/terraform apply`, then `./scripts/deploy-eks-demo.sh`
    or a push to `main` with `EKS_DEPLOY_ENABLED=true`.
 

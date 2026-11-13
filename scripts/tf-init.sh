@@ -6,10 +6,12 @@
 # Requires TF_STATE_BUCKET (see scripts/bootstrap-tf-state.sh). AWS_REGION
 # defaults to us-east-1. The script never passes -reconfigure or -force-copy:
 # if a local state still exists, Terraform stops and asks for -migrate-state,
-# so state is never discarded silently. One-time migration:
+# so state is never discarded silently. One-time migration into an EMPTY
+# bucket key (-force-copy answers the copy prompt, which -input=false
+# cannot show; never use it when the S3 key already holds a state):
 #
-#   scripts/tf-init.sh terraform -migrate-state
-#   scripts/tf-init.sh platform -migrate-state
+#   scripts/tf-init.sh terraform -migrate-state -force-copy
+#   scripts/tf-init.sh platform -migrate-state -force-copy
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

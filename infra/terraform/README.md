@@ -55,12 +55,16 @@ export AWS_REGION=us-east-1
 ```
 
 If a checkout still holds a local `terraform.tfstate` with resources, migrate
-it once (Terraform copies the local state into S3):
+it once into the empty bucket keys (Terraform copies the local state into S3
+and empties the local file; back it up first):
 
 ```bash
-./scripts/tf-init.sh terraform -migrate-state
-./scripts/tf-init.sh platform -migrate-state
+./scripts/tf-init.sh terraform -migrate-state -force-copy
+./scripts/tf-init.sh platform -migrate-state -force-copy
 ```
+
+`-force-copy` is required because `tf-init.sh` runs with `-input=false`. Never
+use it when the S3 key already holds a state: it would overwrite it.
 
 `tf-init.sh` never passes `-reconfigure` or `-force-copy`, so a local state is
 never discarded silently. The destroy script keeps the bucket.
