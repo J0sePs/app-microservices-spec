@@ -104,9 +104,12 @@ the `withdrawal-jwt` Secret. The Deployment maps it to
 `WITHDRAWAL_SOLES_AUTH_JWT_SECRET`, `WITHDRAWAL_SOLES_WALLET_JWT_SECRET`, and
 `WITHDRAWAL_SOLES_USERS_JWT_SECRET`, and sets the three matching issuer
 variables from `var.jwt_issuer` (default `billetera-dev`). The value must equal
-`JWT_SECRET` in `billetera-api`. A pod-template annotation carries the
-Secret's `resource_version`, so rotating the secret restarts the pods without
-writing any hash of the secret into pod metadata.
+`JWT_SECRET` in `billetera-api`. A pod-template annotation carries
+`var.jwt_secret_version`; bumping it together with the secret restarts the
+pods. The first design used the Secret's `resource_version`, but that value is
+unknown at plan time and the Kubernetes provider fails with "Provider produced
+inconsistent final plan" (seen in the first CI deploy). A hash of the secret was
+rejected because it would publish a guessable digest in pod metadata.
 
 ### 6. Pipeline shape
 

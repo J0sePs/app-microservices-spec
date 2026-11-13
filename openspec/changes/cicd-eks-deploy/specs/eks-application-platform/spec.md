@@ -116,5 +116,5 @@ in any output.
 
 #### Scenario: Secret rotation restarts the pods
 
-- **WHEN** `jwt_secret` changes
+- **WHEN** `jwt_secret` changes together with `jwt_secret_version`
 - **THEN** the Secret is updated and the Deployment rolls out new pods

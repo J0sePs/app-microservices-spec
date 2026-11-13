@@ -111,10 +111,13 @@ resource "kubernetes_deployment_v1" "app" {
           "app.kubernetes.io/part-of" = "withdrawal-soles"
         }
 
-        # Rotating the JWT Secret changes its resource version and restarts the
-        # pods, without writing any hash of the secret into pod metadata.
+        # Bump jwt_secret_version when rotating jwt_secret to restart the pods.
+        # The value must be known at plan time: a computed value such as the
+        # Secret's resource_version makes the kubernetes provider fail with
+        # "Provider produced inconsistent final plan". A hash of the secret
+        # would also work but would publish a guessable digest in pod metadata.
         annotations = {
-          "withdrawal-soles/jwt-secret-version" = kubernetes_secret_v1.jwt.metadata[0].resource_version
+          "withdrawal-soles/jwt-secret-version" = var.jwt_secret_version
         }
       }
 

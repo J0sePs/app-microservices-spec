@@ -140,6 +140,12 @@ variable "jwt_secret" {
   }
 }
 
+variable "jwt_secret_version" {
+  description = "Label for the current jwt_secret. Change it together with jwt_secret to roll the pods onto the new value."
+  type        = string
+  default     = "1"
+}
+
 variable "jwt_issuer" {
   description = "Service JWT issuer shared with billetera-api (JWT_ISSUER)."
   type        = string
