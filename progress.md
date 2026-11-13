@@ -10,7 +10,7 @@ chat history is not.
 - Standard startup path: `./init.sh`
 - Standard verification path: `./scripts/verify.sh`
 - Current highest-priority unfinished feature: none — all registered features are `passing`; the other five services are follow-ups
-- Current blocker: none; the AWS practice stack state is documented in `session-handoff.md`
+- Current blocker: none; the AWS practice stack is **deployed and live** as of 2026-11-13 (billing active), see `session-handoff.md`
 
 ## Session Log
 
@@ -629,3 +629,62 @@ chat history is not.
   Billetera PEN dependency are unaffected; no AWS compute remains.
 - Next best step: redeploy with `terraform -chdir=infra/terraform apply` and
   `./scripts/deploy-eks-demo.sh` only when a practice run is needed.
+
+### Session 024
+
+- Date: 2026-11-13
+- Goal: Deploy the `withdrawal-soles` practice stack on AWS and verify it end to end.
+- Completed:
+  - Confirmed a clean starting point: valid credentials for account
+    `205346659030`, empty Terraform states, no EKS/RDS/ECR resources.
+  - `terraform -chdir=infra/terraform apply` from a saved plan:
+    `41 added, 0 changed, 0 destroyed` (VPC, 2 public + 2 private subnets, NAT,
+    EKS `app-nube-2-dev-eks` on v1.35, 2 × `t3.small` nodes, ECR, private RDS
+    PostgreSQL 15.17, IAM, SGs).
+  - `./scripts/deploy-eks-demo.sh` pushed image `4636058` to ECR and applied
+    `infra/platform` (10 resources): Traefik 42.2.0, namespace, DB secret,
+    migration Job `Completed`, 2/2 `withdrawal-soles` pods, 1/1
+    `mock-dependencies`, Ingress, public Classic LoadBalancer.
+  - Found the published wallet `http://52.67.162.209` unreachable (TCP timeout
+    on port 80) and, with the owner's approval, pointed
+    `wallet_service_url` at the in-cluster Traefik mock for this practice run.
+  - Added an opt-in `WALLET_SERVICE_URL` override to
+    `scripts/deploy-eks-demo.sh` so the wallet target can be chosen without
+    editing Terraform; documented it in `infra/terraform/README.md` and
+    `infra/platform/README.md`.
+- Verification run:
+  - `kubectl get nodes`: 2 nodes `Ready` (v1.35.9-eks-8418f54).
+  - `kubectl -n withdrawal-soles get pods,svc,ingress`: app 2/2 Running, mock
+    1/1 Running, migration Job Completed, Ingress with the ELB address.
+  - `GET /health`, `/docs`, `/openapi.json`, `/` through the gateway: 200.
+  - `scripts/wallet_contract_check.py --base-url <gateway> --wallet-url <gateway>`:
+    11/11 checks passed (401 without token, 401 without `X-User-Id`, list,
+    wallet balance 25000 cents, create 201 COMPLETED, replay 200 same id,
+    debit 25000 → 24000, reverse 200 REVERSED, second reverse 422, balance
+    restored to 25000).
+  - Domain limits through the gateway: `9.99` → 422 `INVALID_AMOUNT`,
+    `5000.01` → 422 `INVALID_AMOUNT`, `10.00` → 201 COMPLETED,
+    missing `Idempotency-Key` → 422 `MISSING_IDEMPOTENCY_KEY`; the S/ 10.00
+    operation `b2d17e3f-9569-4330-95f0-3af67444150a` was reversed (200 REVERSED)
+    and the balance restored.
+  - Pod environment: DB URL on
+    `app-nube-2-dev-postgres.c2fc66is431b.us-east-1.rds.amazonaws.com:5432`;
+    wallet and users clients on `http://traefik.traefik.svc.cluster.local`.
+  - `aws rds describe-db-instances`: `available`, PostgreSQL 15.17,
+    `PubliclyAccessible=false`; ECR holds image `4636058`.
+  - `./init.sh`: VERIFICATION PASSED (5/5 subsystems, 16/16 checks; 106 tests).
+- Evidence captured:
+  - `terraform apply` (infra): `Apply complete! Resources: 41 added`.
+  - `terraform apply` (platform): `Apply complete! Resources: 10 added`.
+  - Gateway: `http://abc44d73ea94740738c53880a3469936-1565234038.us-east-1.elb.amazonaws.com`.
+  - Contract checker: `Summary: 11/11 checks passed`.
+- Commits: (this session)
+- Files or artifacts updated: `scripts/deploy-eks-demo.sh`,
+  `infra/terraform/README.md`, `infra/platform/README.md`, `progress.md`,
+  `feature_list.json`, `session-handoff.md`
+- Known risk or unresolved issue: the stack is billable (~$157/month while it
+  runs) and the gateway is public with no edge authentication, so it is
+  practice-only. The wallet target is the in-cluster stub, not the published
+  Billetera PEN API, because the latter is down.
+- Next best step: run `./scripts/destroy-eks-demo.sh` when the practice run
+  ends; restore the published wallet URL afterwards once it is reachable.
