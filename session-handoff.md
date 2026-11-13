@@ -4,82 +4,96 @@
 
 - `arch-001`, `withdrawal-001`, `infra-001`, `platform-001`, `wallet-001`, and
   `security-001` are `passing` with evidence.
-- `./init.sh` passes with 5/5 harness subsystems and 16/16 checks.
-- Service authentication and the users contract are verified locally:
-  - `make verify`: ruff clean, 106 tests passed.
-  - Simulator: 15/15 checks in `simulate`, 9/9 in `live`.
-  - HTTP checker against the compose stack: 11/11 checks with the balance
-    restored.
-  - `openspec validate --all --strict`: 8 passed, 0 failed.
-- The AWS practice stack is **up**:
-  - `infra/terraform`: 41 resources — VPC, NAT, EKS 1.35 with 2 `t3.small`
-    nodes, ECR, private RDS PostgreSQL 15 (`db.t4g.micro`), IAM, SGs.
-  - `infra/platform`: Traefik gateway, namespace, DB secret, Alembic job, two
-    app replicas, mock dependencies, ingress. Image `28b1e55`.
-  - Gateway: `http://a0f4e669772d6496a9125e3de34cffbc-795710705.us-east-1.elb.amazonaws.com`
-- The published Billetera Digital PEN API v1.1.0
-  (`http://52.67.162.209`) is consumed end to end through the AWS gateway:
-  - Contract check: 11/11.
-  - Withdrawal `74e2f8e7-a36e-417d-b781-1af20d15ada9`: payment debit
-    `7bc4cef5-9a05-49af-8bc0-f51eb3d6a325`, reversal credit
-    `849ab4e0-3120-48cf-b839-eb09e0e00826`, balance `25000 -> 24000 -> 25000`
-    cents.
-- The local Docker Compose stack is also running and healthy; `localhost:8080`
-  serves the API through Traefik.
+- `./init.sh` passes with 5/5 harness subsystems and 16/16 checks (106 tests).
+- **The AWS practice stack is deployed and live** (2026-11-13):
+  - `infra/terraform`: 41 resources in `us-east-1` (VPC, NAT, EKS
+    `app-nube-2-dev-eks` v1.35.9 with 2 `t3.small` nodes Ready, ECR, private RDS
+    PostgreSQL 15.17).
+  - `infra/platform`: 10 resources (Traefik 42.2.0 2/2, app 2/2, mock 1/1,
+    migration Job Completed, Ingress, public Classic LoadBalancer).
+  - Gateway: `http://abc44d73ea94740738c53880a3469936-1565234038.us-east-1.elb.amazonaws.com`
+  - `/health`, `/docs`, `/openapi.json`, `/`: 200.
+  - `scripts/wallet_contract_check.py` against the gateway: 11/11 checks; debit
+    25000 → 24000 cents and reversal restored 25000.
+  - Limits through the gateway: `9.99`/`5000.01` → 422 `INVALID_AMOUNT`,
+    `10.00` → 201, missing `Idempotency-Key` → 422; operation
+    `b2d17e3f-9569-4330-95f0-3af67444150a` reversed (200 `REVERSED`).
+  - The local Docker Compose stack is also running and healthy; `localhost:8080`
+    serves the API through Traefik.
 
 ## Changed This Session
 
-- `postman/withdrawal-soles-billetera.postman_collection.json` tests both
-  services (withdrawal-soles and Billetera PEN) plus an integrated flow; the
-  collection signs the service JWT automatically.
-- `README.md` now documents only `withdrawal-soles`: responsibilities, domain
-  rules, HTTP contract, local commands, and the `withdrawal_soles_db` ERD with
-  its constraints and status lifecycle.
-- The repository is published to `J0sePs/app-microservices-spec`; `origin/main`
-  includes the full local history after an `--allow-unrelated-histories` merge.
-- The generated contract now lives at `api/openapi.yaml`; `make openapi` writes
-  there. It reflects 7 operations, `BearerAuth`, the current gateway URL, and
-  the published wallet dependency.
-- `api/openapi-service2.yaml` is checked in as the reference contract for the
-  consumed wallet API.
-- The wallet base URL moved to `http://52.67.162.209` in settings,
-  `.env.example`, docs, scripts, and the platform module
-  (`wallet_service_url` variable, default the published API).
-- The EKS deployment now sets `WITHDRAWAL_SOLES_WALLET_SERVICE_URL` from that
-  variable instead of the in-cluster mock.
+- `scripts/deploy-eks-demo.sh` accepts an optional `WALLET_SERVICE_URL`
+  override; it is passed to the platform module as `wallet_service_url`.
+- `infra/terraform/README.md` and `infra/platform/README.md` document that
+  override.
+- `progress.md`, `feature_list.json`, and `session-handoff.md` record the
+  deployment.
 
 ## Broken Or Unverified
 
-- The AWS stack costs roughly $157/month while it runs. Destroy it when the
-  practice run ends.
-- The published wallet is an external dependency; its availability gates
-  withdrawals.
+- The stack is **billable** while it runs (~$157/month, ~$0.22/hour).
+- The published wallet `http://52.67.162.209` is unreachable (TCP timeout on
+  port 80). The deployed service therefore points at the in-cluster
+  `mock-dependencies` wallet stub; the repo default still targets the published
+  API.
 - The gateway is public and has no edge authentication; the service trusts
   `X-User-Id`, so it is practice-only.
 - The development JWT secret (`dev-only-change-me`, 18 bytes) is shared by all
   services. Production must inject a strong secret in every deployment.
-- The real users-service URL is not published. `WITHDRAWAL_SOLES_USERS_SERVICE_URL`
-  is empty and falls back to the user-service base URL; when users publishes,
-  set it explicitly.
-- Terraform uses local state; an S3 backend with locking is required for shared
-  use.
+- The real users-service URL is not published; the deployment uses the
+  in-cluster mock through the gateway.
+- Both states now live in S3 (`s3://app-nube-2-tfstate-205346659030`, keys
+  `withdrawal-soles/infra.tfstate` and `withdrawal-soles/platform.tfstate`,
+  migrated 2026-11-13). Export `TF_STATE_BUCKET` and `AWS_REGION=us-east-1`
+  before any Terraform command; the local `terraform.tfstate` files are empty.
+  The code on `main` before the PR merge still declares the local backend; do
+  not run Terraform from `main` until the PR is merged.
+- `infra/terraform` is applied with the new code (3 added, 1 changed): ECR
+  `IMMUTABLE_WITH_EXCLUSION` for `latest`, lifecycle policy, and a cluster-admin
+  access entry for `github-actions-withdrawal-soles`.
+- GitHub is configured: secrets `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+  (CI user key), `AWS_REGION`, `DB_PASSWORD`, `JWT_SECRET`
+  (`dev-only-change-me`); variables `TF_STATE_BUCKET`,
+  `WALLET_MOCK_ENABLED=true`. `EKS_DEPLOY_ENABLED` is not set, so merges only
+  verify until it is set to `true`.
+- `cicd-001` is `in_progress`: no CI deploy has run yet; `actionlint` not run.
+- The `billetera` namespace does not exist in the cluster yet; deploys need
+  `WALLET_MOCK_ENABLED=1` (script) or the GitHub variable
+  `WALLET_MOCK_ENABLED=true`.
 
 ## Next Best Step
 
-1. Send `api/openapi.yaml` to the wallet team.
-2. Re-run the integration when the published wallet changes:
+0. CI/CD (`cicd-001`): merge the `feature/cicd-eks-deploy` PR after
+   registering the GitHub secrets (`AWS_ACCESS_KEY_ID`,
+   `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `DB_PASSWORD`, `JWT_SECRET`) and
+   variables (`TF_STATE_BUCKET`, `EKS_DEPLOY_ENABLED`, `WALLET_MOCK_ENABLED`),
+   then confirm the first deploy and archive `cicd-eks-deploy`.
 
-   ```bash
-   .venv/bin/python scripts/wallet_contract_check.py \
-     --base-url http://<gateway> \
-     --wallet-url http://52.67.162.209
-   ```
-
-3. Stop AWS charges after the practice run:
+1. When the practice run ends, stop billing:
 
    ```bash
    ./scripts/destroy-eks-demo.sh
    ```
+
+2. Verify the account is clean afterwards:
+
+   ```bash
+   terraform -chdir=infra/terraform state list
+   terraform -chdir=infra/platform state list
+   aws eks list-clusters --region us-east-1
+   aws rds describe-db-instances --region us-east-1 --query 'DBInstances[].DBInstanceIdentifier'
+   ```
+
+3. When the published wallet is reachable again, redeploy without the override
+   (or set `WALLET_SERVICE_URL=http://52.67.162.209`) and re-run:
+
+   ```bash
+   .venv/bin/python scripts/wallet_contract_check.py \
+     --base-url http://<gateway> --wallet-url http://52.67.162.209
+   ```
+
+4. Send `api/openapi.yaml` to the wallet team.
 
 ## Commands
 
@@ -95,7 +109,7 @@ openspec validate --all --strict
 
 # HTTP contract check against a running service
 .venv/bin/python scripts/wallet_contract_check.py --base-url http://localhost:8080 --wallet-url http://localhost:8080
-.venv/bin/python scripts/wallet_contract_check.py --base-url http://<gateway> --wallet-url http://52.67.162.209
+.venv/bin/python scripts/wallet_contract_check.py --base-url http://<gateway> --wallet-url http://<gateway>
 
 # Local stack
 docker compose up -d --build
@@ -104,7 +118,8 @@ curl http://localhost:8080/docs
 
 # AWS deployment
 terraform -chdir=infra/terraform apply
-./scripts/deploy-eks-demo.sh
+export TF_STATE_BUCKET=<bucket> AWS_REGION=us-east-1
+JWT_SECRET='<shared-with-billetera-api>' WALLET_MOCK_ENABLED=1 ./scripts/deploy-eks-demo.sh
 terraform -chdir=infra/platform output -raw gateway_url
 kubectl -n withdrawal-soles get pods,svc,ingress
 

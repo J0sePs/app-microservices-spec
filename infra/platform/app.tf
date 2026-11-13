@@ -21,6 +21,19 @@ resource "kubernetes_secret_v1" "database" {
   }
 }
 
+resource "kubernetes_secret_v1" "jwt" {
+  metadata {
+    name      = "withdrawal-jwt"
+    namespace = kubernetes_namespace_v1.app.metadata[0].name
+  }
+
+  type = "Opaque"
+
+  data = {
+    secret = var.jwt_secret
+  }
+}
+
 resource "kubernetes_job_v1" "migrate" {
   metadata {
     name      = "withdrawal-migrate"
@@ -97,6 +110,12 @@ resource "kubernetes_deployment_v1" "app" {
           "app.kubernetes.io/name"    = local.app_name
           "app.kubernetes.io/part-of" = "withdrawal-soles"
         }
+
+        # Rotating the JWT Secret changes its resource version and restarts the
+        # pods, without writing any hash of the secret into pod metadata.
+        annotations = {
+          "withdrawal-soles/jwt-secret-version" = kubernetes_secret_v1.jwt.metadata[0].resource_version
+        }
       }
 
       spec {
@@ -122,24 +141,28 @@ resource "kubernetes_deployment_v1" "app" {
             }
           }
 
-          env {
-            name  = "WITHDRAWAL_SOLES_USER_SERVICE_URL"
-            value = "http://${local.gateway_service}"
+          dynamic "env" {
+            for_each = local.app_env
+
+            content {
+              name  = env.key
+              value = env.value
+            }
           }
 
-          env {
-            name  = "WITHDRAWAL_SOLES_TRANSACTION_SERVICE_URL"
-            value = "http://${local.gateway_service}"
-          }
+          dynamic "env" {
+            for_each = toset(local.jwt_secret_env)
 
-          env {
-            name  = "WITHDRAWAL_SOLES_WALLET_SERVICE_URL"
-            value = var.wallet_service_url
-          }
+            content {
+              name = env.value
 
-          env {
-            name  = "WITHDRAWAL_SOLES_BUSINESS_TIMEZONE"
-            value = "America/Lima"
+              value_from {
+                secret_key_ref {
+                  name = kubernetes_secret_v1.jwt.metadata[0].name
+                  key  = "secret"
+                }
+              }
+            }
           }
 
           resources {
@@ -185,6 +208,18 @@ resource "kubernetes_deployment_v1" "app" {
     kubernetes_job_v1.migrate,
     helm_release.traefik,
   ]
+
+  lifecycle {
+    precondition {
+      condition     = var.mock_dependencies_enabled || !var.wallet_mock_enabled
+      error_message = "wallet_mock_enabled requires mock_dependencies_enabled = true."
+    }
+
+    precondition {
+      condition     = var.mock_dependencies_enabled || (var.user_service_url != "" && var.transaction_service_url != "")
+      error_message = "When mock_dependencies_enabled is false, set user_service_url and transaction_service_url to real services."
+    }
+  }
 }
 
 resource "kubernetes_service_v1" "app" {
@@ -208,6 +243,8 @@ resource "kubernetes_service_v1" "app" {
 }
 
 resource "kubernetes_deployment_v1" "mock" {
+  count = var.mock_dependencies_enabled ? 1 : 0
+
   metadata {
     name      = local.mock_name
     namespace = kubernetes_namespace_v1.app.metadata[0].name
@@ -274,6 +311,8 @@ resource "kubernetes_deployment_v1" "mock" {
 }
 
 resource "kubernetes_service_v1" "mock" {
+  count = var.mock_dependencies_enabled ? 1 : 0
+
   metadata {
     name      = local.mock_name
     namespace = kubernetes_namespace_v1.app.metadata[0].name

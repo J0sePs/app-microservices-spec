@@ -181,3 +181,25 @@ variable "db_skip_final_snapshot" {
   type        = bool
   default     = true
 }
+
+variable "ecr_max_image_count" {
+  description = "Number of most recent images kept in the ECR repository; older images are expired by the lifecycle policy."
+  type        = number
+  default     = 15
+
+  validation {
+    condition     = var.ecr_max_image_count >= 3 && var.ecr_max_image_count <= 1000
+    error_message = "ecr_max_image_count must be between 3 and 1000."
+  }
+}
+
+variable "cluster_admin_principal_arns" {
+  description = "IAM user or role ARNs (for example the GitHub Actions deployer) granted cluster admin through EKS access entries. The cluster creator already has admin and must not be listed."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for arn in var.cluster_admin_principal_arns : can(regex("^arn:aws[a-zA-Z-]*:iam::[0-9]{12}:(user|role)/.+$", arn))])
+    error_message = "Each cluster_admin_principal_arns entry must be an IAM user or role ARN."
+  }
+}

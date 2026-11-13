@@ -1,4 +1,8 @@
-name: Verify
+name: CI/CD
+
+# Every push and pull request runs the verification gates. Only pushes to main
+# (or a manual run on main) with the repository variable EKS_DEPLOY_ENABLED set
+# to "true" publish the image to ECR and roll it out to the shared EKS cluster.
 
 on:
   push:
@@ -11,9 +15,41 @@ permissions:
 
 concurrency:
   group: verify-${{ github.ref }}
-  cancel-in-progress: true
+  # Cancel superseded pull-request runs only. A run on main may be applying
+  # Terraform, and cancelling it would leave the state lock behind.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  TERRAFORM_VERSION: 1.14.5
+  PYTHON_VERSION: "3.12"
 
 jobs:
+  checks:
+    name: Lint, tests, OpenAPI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install dependencies
+        run: make install
+
+      - name: Lint
+        run: make lint
+
+      - name: Test
+        run: make test
+
+      - name: OpenAPI contract is current and valid
+        run: make openapi-check
+
   verify:
     name: Harness + OpenSpec
     runs-on: ubuntu-latest
@@ -29,7 +65,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install OpenSpec CLI
         run: npm install --global @fission-ai/openspec@1
@@ -47,7 +83,222 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.14.5
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
 
       - name: Run Terraform checks
         run: ./scripts/verify-terraform.sh
+
+  image:
+    name: Build and push image
+    needs: [checks, verify, terraform]
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      && github.ref == 'refs/heads/main'
+      && vars.EKS_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+      image_uri: ${{ steps.meta.outputs.image_uri }}
+      cluster_name: ${{ steps.infra.outputs.cluster_name }}
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+    steps:
+      - name: Check required configuration
+        env:
+          HAS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID != '' }}
+          HAS_SECRET_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' }}
+        run: |
+          missing=()
+          [[ "$HAS_KEY_ID" == "true" ]] || missing+=("secret AWS_ACCESS_KEY_ID")
+          [[ "$HAS_SECRET_KEY" == "true" ]] || missing+=("secret AWS_SECRET_ACCESS_KEY")
+          [[ -n "$AWS_REGION" ]] || missing+=("secret AWS_REGION")
+          [[ -n "$TF_STATE_BUCKET" ]] || missing+=("variable TF_STATE_BUCKET")
+          if (( ${#missing[@]} )); then
+            printf '::error::Missing %s\n' "${missing[@]}"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - name: Read ECR repository from infra/terraform
+        id: infra
+        run: |
+          ./scripts/tf-init.sh terraform >/dev/null
+          {
+            echo "ecr_url=$(terraform -chdir=infra/terraform output -raw ecr_repository_url)"
+            echo "ecr_name=$(terraform -chdir=infra/terraform output -raw ecr_repository_name)"
+            echo "cluster_name=$(terraform -chdir=infra/terraform output -raw eks_cluster_name)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Image metadata
+        id: meta
+        env:
+          ECR_URL: ${{ steps.infra.outputs.ecr_url }}
+          ECR_NAME: ${{ steps.infra.outputs.ecr_name }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "image_uri=$ECR_URL:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          # Commit SHA tags are immutable in ECR; a re-run must not rebuild.
+          if aws ecr describe-images --repository-name "$ECR_NAME" \
+              --image-ids "imageTag=$IMAGE_TAG" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Image $IMAGE_TAG already in ECR; skipping the build."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        if: steps.meta.outputs.exists == 'false'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        if: steps.meta.outputs.exists == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          provenance: false
+          tags: |
+            ${{ steps.infra.outputs.ecr_url }}:${{ github.sha }}
+            ${{ steps.infra.outputs.ecr_url }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Point latest at the existing image
+        if: steps.meta.outputs.exists == 'true'
+        env:
+          ECR_NAME: ${{ steps.infra.outputs.ecr_name }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          manifest="$(aws ecr batch-get-image --repository-name "$ECR_NAME" \
+            --image-ids "imageTag=$IMAGE_TAG" --query 'images[0].imageManifest' --output text)"
+          media_type="$(aws ecr batch-get-image --repository-name "$ECR_NAME" \
+            --image-ids "imageTag=$IMAGE_TAG" --query 'images[0].imageManifestMediaType' --output text)"
+          if ! output="$(aws ecr put-image --repository-name "$ECR_NAME" --image-tag latest \
+              --image-manifest "$manifest" --image-manifest-media-type "$media_type" 2>&1)"; then
+            if [[ "$output" == *ImageAlreadyExistsException* ]]; then
+              echo "latest already points at $IMAGE_TAG"
+            else
+              echo "$output" >&2
+              exit 1
+            fi
+          fi
+
+  deploy:
+    name: Deploy to EKS
+    needs: image
+    runs-on: ubuntu-latest
+    environment:
+      name: eks-dev
+      url: ${{ steps.smoke.outputs.gateway_url }}
+    # Never cancel a running apply; later deploys wait their turn.
+    concurrency:
+      group: eks-deploy
+      cancel-in-progress: false
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      IMAGE_TAG: ${{ needs.image.outputs.image_tag }}
+      IMAGE_URI: ${{ needs.image.outputs.image_uri }}
+      CLUSTER_NAME: ${{ needs.image.outputs.cluster_name }}
+      NAMESPACE: withdrawal-soles
+      DEPLOYMENT: withdrawal-soles
+    steps:
+      - name: Check required secrets
+        env:
+          HAS_DB_PASSWORD: ${{ secrets.DB_PASSWORD != '' }}
+          HAS_JWT_SECRET: ${{ secrets.JWT_SECRET != '' }}
+        run: |
+          missing=()
+          [[ "$HAS_DB_PASSWORD" == "true" ]] || missing+=("secret DB_PASSWORD")
+          [[ "$HAS_JWT_SECRET" == "true" ]] || missing+=("secret JWT_SECRET")
+          if (( ${#missing[@]} )); then
+            printf '::error::Missing %s\n' "${missing[@]}"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - name: Apply infra/platform
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+          TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
+          TF_VAR_state_bucket: ${{ vars.TF_STATE_BUCKET }}
+          TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
+          TF_VAR_jwt_issuer: ${{ vars.JWT_ISSUER || 'billetera-dev' }}
+          TF_VAR_wallet_mock_enabled: ${{ vars.WALLET_MOCK_ENABLED == 'true' }}
+          WALLET_SERVICE_URL: ${{ vars.WALLET_SERVICE_URL }}
+        run: |
+          ./scripts/tf-init.sh platform >/dev/null
+          extra=()
+          if [[ -n "$WALLET_SERVICE_URL" ]]; then
+            extra+=(-var="wallet_service_url=$WALLET_SERVICE_URL")
+          fi
+          terraform -chdir=infra/platform apply -auto-approve -input=false -no-color \
+            -var="image_tag=$IMAGE_TAG" "${extra[@]}"
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --region "$AWS_REGION" --name "$CLUSTER_NAME"
+
+      - name: Wait for the rollout
+        run: kubectl -n "$NAMESPACE" rollout status "deployment/$DEPLOYMENT" --timeout=300s
+
+      - name: Confirm the running image
+        run: |
+          running="$(kubectl -n "$NAMESPACE" get deployment "$DEPLOYMENT" \
+            -o jsonpath='{.spec.template.spec.containers[0].image}')"
+          echo "Running image: $running"
+          if [[ "$running" != "$IMAGE_URI" ]]; then
+            echo "::error::Expected $IMAGE_URI but the Deployment runs $running"
+            exit 1
+          fi
+          kubectl -n "$NAMESPACE" get pods -l "app.kubernetes.io/name=$DEPLOYMENT" -o wide
+
+      - name: Smoke test through the gateway
+        id: smoke
+        run: |
+          gateway="$(terraform -chdir=infra/platform output -raw gateway_url)"
+          echo "gateway_url=$gateway" >> "$GITHUB_OUTPUT"
+          curl --fail --silent --show-error --retry 10 --retry-delay 6 --retry-all-errors \
+            "$gateway/health"
+          echo
+          {
+            echo "### Deployed \`$IMAGE_TAG\`"
+            echo
+            echo "- Image: \`$IMAGE_URI\`"
+            echo "- Gateway: $gateway"
+            echo "- Wallet URL: \`$(terraform -chdir=infra/platform output -raw wallet_service_url)\`"
+          } >> "$GITHUB_STEP_SUMMARY"

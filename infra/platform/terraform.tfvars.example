@@ -1,6 +1,10 @@
 aws_region = "us-east-1"
 namespace  = "withdrawal-soles"
 
+# S3 bucket created by scripts/bootstrap-tf-state.sh.
+state_bucket    = "app-nube-2-tfstate-<account-id>"
+infra_state_key = "withdrawal-soles/infra.tfstate"
+
 # Use a tag that exists in the ECR repository.
 image_tag = "latest"
 
@@ -10,6 +14,15 @@ app_replicas          = 2
 mock_replicas         = 1
 
 db_username = "withdrawal"
+
+# Shared cluster: billetera-api runs in namespace billetera on port 3000.
+wallet_service_url        = "http://billetera-api.billetera.svc.cluster.local:3000"
+wallet_mock_enabled       = false
+mock_dependencies_enabled = true
+
+# Must match JWT_ISSUER in billetera-api. The secret (JWT_SECRET) goes through
+# TF_VAR_jwt_secret, never in this file.
+jwt_issuer = "billetera-dev"
 
 # Do not commit a real password. Prefer TF_VAR_db_password or an ignored
 # terraform.tfvars file.

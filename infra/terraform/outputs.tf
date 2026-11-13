@@ -29,6 +29,16 @@ output "ecr_repository_url" {
   value       = aws_ecr_repository.withdrawal_soles.repository_url
 }
 
+output "ecr_repository_name" {
+  description = "ECR repository name for the withdrawal-soles image."
+  value       = aws_ecr_repository.withdrawal_soles.name
+}
+
+output "aws_region" {
+  description = "AWS region that hosts the platform."
+  value       = var.aws_region
+}
+
 output "rds_endpoint" {
   description = "PostgreSQL endpoint host and port."
   value       = aws_db_instance.this.endpoint

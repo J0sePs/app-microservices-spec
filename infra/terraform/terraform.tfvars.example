@@ -15,6 +15,13 @@ db_allocated_storage = 20
 db_name     = "withdrawal_soles_db"
 db_username = "withdrawal"
 
+# ECR keeps the newest N images; untagged images expire after one day.
+ecr_max_image_count = 15
+
+# Extra cluster admins, e.g. the IAM user behind the GitHub Actions secrets.
+# Leave empty when CI uses the same IAM identity that created the cluster.
+# cluster_admin_principal_arns = ["arn:aws:iam::<account-id>:user/github-actions-withdrawal-soles"]
+
 # Free Tier accounts must keep this at 0.
 db_backup_retention_period = 0
 

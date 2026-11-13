@@ -6,7 +6,7 @@ PostgreSQL 15 instance described in
 `openspec/architecture/system-context.md`.
 
 This module does **not** deploy the application, Traefik, or Kubernetes
-manifests. Those are separate follow-ups.
+manifests; `infra/platform` does.
 
 ## Resources
 
@@ -14,13 +14,13 @@ manifests. Those are separate follow-ups.
 | --- | --- |
 | Network | VPC, two public subnets, two private subnets, internet gateway, NAT gateway, route tables |
 | Compute | EKS cluster, managed node group in the private subnets, IAM roles and policies |
-| Registry | ECR repository with scan-on-push and immutable tags |
+| Registry | ECR repository with scan-on-push, immutable commit tags (`latest` excluded), and a lifecycle policy (untagged images expire after 1 day; newest `ecr_max_image_count` kept) |
 | Data | RDS PostgreSQL 15, DB subnet group, security group restricted to EKS nodes |
-| Access | Security groups for control plane, nodes, and database |
+| Access | Security groups for control plane, nodes, and database; optional EKS access entries for `cluster_admin_principal_arns` (CI deployer) |
 
 ## Prerequisites
 
-- Terraform 1.9 or newer.
+- Terraform 1.10 or newer (S3 native state locking).
 - AWS credentials for the target account, for example through `AWS_PROFILE`.
 - `kubectl` only if you intend to connect to a deployed cluster.
 
@@ -39,6 +39,35 @@ export TF_VAR_db_password='use-a-strong-password'
 
 `terraform.tfvars` and all state files are ignored by git. The example file
 contains no secret.
+
+## Remote state (S3)
+
+Both `infra/terraform` and `infra/platform` use a partial `backend "s3" {}`
+so operators and GitHub Actions share one locked state. Create the bucket once
+(versioned, encrypted, public access blocked), then initialize:
+
+```bash
+./scripts/bootstrap-tf-state.sh            # prints the bucket name
+export TF_STATE_BUCKET=app-nube-2-tfstate-<account-id>
+export AWS_REGION=us-east-1
+./scripts/tf-init.sh terraform             # key withdrawal-soles/infra.tfstate
+./scripts/tf-init.sh platform              # key withdrawal-soles/platform.tfstate
+```
+
+If a checkout still holds a local `terraform.tfstate` with resources, migrate
+it once into the empty bucket keys (Terraform copies the local state into S3
+and empties the local file; back it up first):
+
+```bash
+./scripts/tf-init.sh terraform -migrate-state -force-copy
+./scripts/tf-init.sh platform -migrate-state -force-copy
+```
+
+`-force-copy` is required because `tf-init.sh` runs with `-input=false`. Never
+use it when the S3 key already holds a state: it would overwrite it.
+
+`tf-init.sh` never passes `-reconfigure` or `-force-copy`, so a local state is
+never discarded silently. The destroy script keeps the bucket.
 
 ## Static verification (no AWS credentials)
 
@@ -113,6 +142,7 @@ created during implementation.
 terraform output
 terraform output -raw configure_kubectl
 terraform output -raw ecr_repository_url
+terraform output -raw ecr_repository_name
 terraform output -raw rds_endpoint
 ```
 
@@ -139,7 +169,9 @@ docker tag withdrawal-soles:latest "$(terraform output -raw ecr_repository_url):
 docker push "$(terraform output -raw ecr_repository_url):<git-sha>"
 ```
 
-Tags are immutable, so use a unique tag such as the Git commit SHA.
+Commit tags are immutable, so use a unique tag such as the Git commit SHA.
+Only `latest` can be overwritten. GitHub Actions pushes both on every merge to
+`main`.
 
 ## Database connection
 
@@ -171,8 +203,32 @@ printed from the platform outputs.
 
 The platform module is documented in
 [`infra/platform/README.md`](../platform/README.md). The script reads the
-database password from the ignored `infra/terraform/terraform.tfvars`; no secret
-is committed.
+database password from the ignored `infra/terraform/terraform.tfvars`, and
+needs `TF_STATE_BUCKET` and `JWT_SECRET` (the secret shared with
+`billetera-api`) in the environment; no secret is committed.
+
+The service calls the wallet at
+`http://billetera-api.billetera.svc.cluster.local:3000` by default. While
+`billetera-api` is not deployed in the cluster, use the in-cluster
+`mock-dependencies` wallet stub so the debit/reversal flow still works:
+
+```bash
+WALLET_MOCK_ENABLED=1 ./scripts/deploy-eks-demo.sh
+```
+
+## Continuous delivery
+
+`.github/workflows/verify.yml` deploys every push to `main` when the
+repository variable `EKS_DEPLOY_ENABLED` is `true`. CI never applies this
+module; it reads `ecr_repository_url`, `ecr_repository_name`, and
+`eks_cluster_name` from the S3 state, pushes the image, and applies
+`infra/platform`. The CI identity is the least-privilege IAM user created by
+`scripts/bootstrap-ci-user.sh` (ECR push for this repository,
+`eks:DescribeCluster`, and the state objects in S3). Add its ARN to
+`cluster_admin_principal_arns`, apply, then run
+`scripts/bootstrap-ci-user.sh --create-key`, which stores the access key in the
+GitHub secrets without printing it. Like the state bucket, the user survives
+`destroy-eks-demo.sh`.
 
 ## Destroy
 
@@ -197,7 +253,5 @@ snapshot for disposable environments.
 
 ## Follow-ups
 
-- Add an S3 remote backend with state locking before shared use.
 - Enable Multi-AZ RDS and one NAT gateway per availability zone for production.
-- Deploy Traefik and the service manifests after the cluster is approved.
 - Add an OIDC-backed CI plan job instead of long-lived AWS credentials.

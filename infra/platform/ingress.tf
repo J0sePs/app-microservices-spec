@@ -13,127 +13,21 @@ resource "kubernetes_ingress_v1" "gateway" {
 
     rule {
       http {
-        path {
-          path      = "/api/v1/accounts"
-          path_type = "Prefix"
+        # Routes come from local.ingress_paths: stub routes only when
+        # mock_dependencies_enabled, and /v1/ only when wallet_mock_enabled.
+        dynamic "path" {
+          for_each = local.ingress_paths
 
-          backend {
-            service {
-              name = kubernetes_service_v1.mock.metadata[0].name
-              port {
-                number = 8001
-              }
-            }
-          }
-        }
+          content {
+            path      = path.value.path
+            path_type = "Prefix"
 
-        path {
-          path      = "/api/v1/transactions"
-          path_type = "Prefix"
-
-          backend {
-            service {
-              name = kubernetes_service_v1.mock.metadata[0].name
-              port {
-                number = 8001
-              }
-            }
-          }
-        }
-
-        path {
-          path      = "/usuarios"
-          path_type = "Prefix"
-
-          backend {
-            service {
-              name = kubernetes_service_v1.mock.metadata[0].name
-              port {
-                number = 8001
-              }
-            }
-          }
-        }
-
-        path {
-          path      = "/v1/"
-          path_type = "Prefix"
-
-          backend {
-            service {
-              name = kubernetes_service_v1.mock.metadata[0].name
-              port {
-                number = 8001
-              }
-            }
-          }
-        }
-
-        path {
-          path      = "/api/v1/withdrawals"
-          path_type = "Prefix"
-
-          backend {
-            service {
-              name = kubernetes_service_v1.app.metadata[0].name
-              port {
-                number = 80
-              }
-            }
-          }
-        }
-
-        path {
-          path      = "/health"
-          path_type = "Prefix"
-
-          backend {
-            service {
-              name = kubernetes_service_v1.app.metadata[0].name
-              port {
-                number = 80
-              }
-            }
-          }
-        }
-
-        path {
-          path      = "/docs"
-          path_type = "Prefix"
-
-          backend {
-            service {
-              name = kubernetes_service_v1.app.metadata[0].name
-              port {
-                number = 80
-              }
-            }
-          }
-        }
-
-        path {
-          path      = "/openapi.json"
-          path_type = "Prefix"
-
-          backend {
-            service {
-              name = kubernetes_service_v1.app.metadata[0].name
-              port {
-                number = 80
-              }
-            }
-          }
-        }
-
-        path {
-          path      = "/"
-          path_type = "Prefix"
-
-          backend {
-            service {
-              name = kubernetes_service_v1.app.metadata[0].name
-              port {
-                number = 80
+            backend {
+              service {
+                name = path.value.service
+                port {
+                  number = path.value.port
+                }
               }
             }
           }

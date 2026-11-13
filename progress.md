@@ -10,7 +10,7 @@ chat history is not.
 - Standard startup path: `./init.sh`
 - Standard verification path: `./scripts/verify.sh`
 - Current highest-priority unfinished feature: none — all registered features are `passing`; the other five services are follow-ups
-- Current blocker: none; the AWS practice stack state is documented in `session-handoff.md`
+- Current blocker: none; the AWS practice stack is **deployed and live** as of 2026-11-13 (billing active), see `session-handoff.md`
 
 ## Session Log
 
@@ -598,3 +598,156 @@ chat history is not.
   `withdrawal-soles-integration.md`, `progress.md`
 - Known risk or unresolved issue: none.
 - Next best step: keep new drafts in `docs/` or `temp/`, never in the root.
+
+### Session 023
+
+- Date: 2026-11-10
+- Goal: Tear down the AWS practice stack to stop billing.
+- Completed:
+  - Ran `./scripts/destroy-eks-demo.sh`, which destroyed `infra/platform`
+    first (9 resources: Traefik, namespaces, app/mock deployments, services,
+    secret, migration job, ingress), removed the `withdrawal-soles` namespace
+    and its Classic LoadBalancer, deleted the ECR images, then destroyed
+    `infra/terraform` (41 resources: EKS, node group, RDS, ECR, VPC, NAT, IGW,
+    subnets, IAM, SGs), and deleted the EKS CloudWatch log group.
+- Verification run:
+  - `terraform -chdir=infra/terraform state list` and
+    `terraform -chdir=infra/platform state list`: both empty.
+  - AWS CLI post-destroy sweep in `us-east-1`: no EKS clusters, RDS
+    instances, ECR repositories, tagged VPCs, NAT gateways, ELB/ALB, tagged
+    EBS volumes, tagged security groups, or `/aws/eks` log groups.
+  - `./init.sh` — VERIFICATION PASSED.
+- Evidence captured:
+  - `infra/platform`: `Destroy complete! Resources: 9 destroyed`.
+  - `infra/terraform`: `Destroy complete! Resources: 41 destroyed`.
+  - The only remaining Elastic IP, `32.199.142.201`, is tagged
+    `machupicchu-eip` and is unrelated to this stack; it was left untouched.
+- Commits: (this session)
+- Files or artifacts updated: `progress.md`, `session-handoff.md`,
+  `feature_list.json`
+- Known risk or unresolved issue: local Docker Compose stack and the external
+  Billetera PEN dependency are unaffected; no AWS compute remains.
+- Next best step: redeploy with `terraform -chdir=infra/terraform apply` and
+  `./scripts/deploy-eks-demo.sh` only when a practice run is needed.
+
+### Session 024
+
+- Date: 2026-11-13
+- Goal: Deploy the `withdrawal-soles` practice stack on AWS and verify it end to end.
+- Completed:
+  - Confirmed a clean starting point: valid credentials for account
+    `205346659030`, empty Terraform states, no EKS/RDS/ECR resources.
+  - `terraform -chdir=infra/terraform apply` from a saved plan:
+    `41 added, 0 changed, 0 destroyed` (VPC, 2 public + 2 private subnets, NAT,
+    EKS `app-nube-2-dev-eks` on v1.35, 2 × `t3.small` nodes, ECR, private RDS
+    PostgreSQL 15.17, IAM, SGs).
+  - `./scripts/deploy-eks-demo.sh` pushed image `4636058` to ECR and applied
+    `infra/platform` (10 resources): Traefik 42.2.0, namespace, DB secret,
+    migration Job `Completed`, 2/2 `withdrawal-soles` pods, 1/1
+    `mock-dependencies`, Ingress, public Classic LoadBalancer.
+  - Found the published wallet `http://52.67.162.209` unreachable (TCP timeout
+    on port 80) and, with the owner's approval, pointed
+    `wallet_service_url` at the in-cluster Traefik mock for this practice run.
+  - Added an opt-in `WALLET_SERVICE_URL` override to
+    `scripts/deploy-eks-demo.sh` so the wallet target can be chosen without
+    editing Terraform; documented it in `infra/terraform/README.md` and
+    `infra/platform/README.md`.
+- Verification run:
+  - `kubectl get nodes`: 2 nodes `Ready` (v1.35.9-eks-8418f54).
+  - `kubectl -n withdrawal-soles get pods,svc,ingress`: app 2/2 Running, mock
+    1/1 Running, migration Job Completed, Ingress with the ELB address.
+  - `GET /health`, `/docs`, `/openapi.json`, `/` through the gateway: 200.
+  - `scripts/wallet_contract_check.py --base-url <gateway> --wallet-url <gateway>`:
+    11/11 checks passed (401 without token, 401 without `X-User-Id`, list,
+    wallet balance 25000 cents, create 201 COMPLETED, replay 200 same id,
+    debit 25000 → 24000, reverse 200 REVERSED, second reverse 422, balance
+    restored to 25000).
+  - Domain limits through the gateway: `9.99` → 422 `INVALID_AMOUNT`,
+    `5000.01` → 422 `INVALID_AMOUNT`, `10.00` → 201 COMPLETED,
+    missing `Idempotency-Key` → 422 `MISSING_IDEMPOTENCY_KEY`; the S/ 10.00
+    operation `b2d17e3f-9569-4330-95f0-3af67444150a` was reversed (200 REVERSED)
+    and the balance restored.
+  - Pod environment: DB URL on
+    `app-nube-2-dev-postgres.c2fc66is431b.us-east-1.rds.amazonaws.com:5432`;
+    wallet and users clients on `http://traefik.traefik.svc.cluster.local`.
+  - `aws rds describe-db-instances`: `available`, PostgreSQL 15.17,
+    `PubliclyAccessible=false`; ECR holds image `4636058`.
+  - `./init.sh`: VERIFICATION PASSED (5/5 subsystems, 16/16 checks; 106 tests).
+- Evidence captured:
+  - `terraform apply` (infra): `Apply complete! Resources: 41 added`.
+  - `terraform apply` (platform): `Apply complete! Resources: 10 added`.
+  - Gateway: `http://abc44d73ea94740738c53880a3469936-1565234038.us-east-1.elb.amazonaws.com`.
+  - Contract checker: `Summary: 11/11 checks passed`.
+- Commits: (this session)
+- Files or artifacts updated: `scripts/deploy-eks-demo.sh`,
+  `infra/terraform/README.md`, `infra/platform/README.md`, `progress.md`,
+  `feature_list.json`, `session-handoff.md`
+- Known risk or unresolved issue: the stack is billable (~$157/month while it
+  runs) and the gateway is public with no edge authentication, so it is
+  practice-only. The wallet target is the in-cluster stub, not the published
+  Billetera PEN API, because the latter is down.
+- Next best step: run `./scripts/destroy-eks-demo.sh` when the practice run
+  ends; restore the published wallet URL afterwards once it is reachable.
+
+### Session 025
+
+- Date: 2026-11-13
+- Goal: Prepare CI/CD from GitHub Actions to the shared EKS cluster, where the
+  service consumes `billetera-api` (namespace `billetera`, port `3000`).
+- Completed:
+  - Created OpenSpec change `cicd-eks-deploy` (proposal, design, tasks, deltas
+    for `continuous-delivery`, `aws-platform-infrastructure`, and
+    `eks-application-platform`) and feature `cicd-001` (`in_progress`).
+  - `.github/workflows/verify.yml`: `checks` (`make lint`, `make test`,
+    `make openapi-check`), `verify` (`./init.sh`), `terraform`, and, on `main`
+    with `EKS_DEPLOY_ENABLED=true`, `image` (ECR `<sha>` + `latest`) and
+    `deploy` (`terraform apply` on `infra/platform`, kubeconfig, rollout,
+    image check, `/health`).
+  - S3 backend for both roots (`scripts/bootstrap-tf-state.sh`,
+    `scripts/tf-init.sh`); platform reads infra state from S3.
+  - ECR `IMMUTABLE_WITH_EXCLUSION` for `latest`, lifecycle policy,
+    `ecr_repository_name` output, optional `cluster_admin_principal_arns`.
+  - Platform: wallet default `http://billetera-api.billetera.svc.cluster.local:3000`,
+    `wallet_mock_enabled`, `mock_dependencies_enabled`, `withdrawal-jwt`
+    Secret with issuer `billetera-dev`.
+  - Supporting fix: indentation in `openspec/config.yaml` (OpenSpec ignored
+    the file).
+- Verification run:
+  - `./scripts/verify-terraform.sh`, `make verify` (106 passed),
+    `make openapi-check` (OK; injected drift exits 2),
+    `openspec validate --all --strict` (9/9), `./init.sh` (PASSED).
+  - `terraform console` for the three toggle combinations.
+  - Read-only `terraform plan` of the new code against the live local states
+    (scratch copy, `-lock=false`): infra `1 add, 1 change, 0 destroy`;
+    platform with `wallet_mock_enabled=true` `2 add, 1 change, 0 destroy`
+    (JWT Secret, migration Job re-run, Deployment env; mock moved to `[0]`;
+    Ingress unchanged).
+- Evidence captured: see `cicd-001` in `feature_list.json`.
+- Commits: `feat(cicd): deploy main to the shared EKS cluster from GitHub Actions`
+  on branch `feature/cicd-eks-deploy`.
+- Known risk or unresolved issue: the live stack still uses local state; the
+  next apply needs `scripts/tf-init.sh <module> -migrate-state`. `billetera`
+  namespace does not exist yet, so deploys need `WALLET_MOCK_ENABLED=true`.
+  `actionlint` was not run (blocked by the local permission policy).
+- Next best step: bootstrap the state bucket, migrate both states, register the
+  GitHub secrets and variables, merge the PR, and confirm the first CI deploy.
+- Follow-up (same session): created `s3://app-nube-2-tfstate-205346659030`
+  with `scripts/bootstrap-tf-state.sh` (versioning, AES256, public access
+  block), backed up both local states, and migrated them with
+  `scripts/tf-init.sh <module> -migrate-state -force-copy`. Verified the S3
+  objects and `terraform state list` through S3 (infra 45 entries, platform
+  12); the local state files are now empty. Credentialed plan through S3:
+  `1 to add, 1 to change, 0 to destroy` (not applied). Registered the GitHub
+  variable `TF_STATE_BUCKET`. Documented that `-force-copy` is required for the
+  one-time migration because `tf-init.sh` runs with `-input=false`.
+- Follow-up (same session): created the least-privilege IAM user
+  `github-actions-withdrawal-soles` with `scripts/bootstrap-ci-user.sh`
+  (inline policy: ECR push for this repository, `eks:DescribeCluster`, S3 state
+  objects), added it to `cluster_admin_principal_arns` in the ignored
+  `terraform.tfvars`, and applied `infra/terraform` from a saved plan:
+  `Apply complete! Resources: 3 added, 1 changed, 0 destroyed`. ECR now reports
+  `IMMUTABLE_WITH_EXCLUSION` with the `latest` wildcard. The CI key was created
+  and stored straight into GitHub secrets; with that key, S3 state, ECR, and
+  `eks describe-cluster` (ACTIVE) succeed. Stored `AWS_REGION`, `DB_PASSWORD`
+  (from the ignored tfvars), `JWT_SECRET`, and the variable
+  `WALLET_MOCK_ENABLED=true`. `EKS_DEPLOY_ENABLED` is intentionally unset.

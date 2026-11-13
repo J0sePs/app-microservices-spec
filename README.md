@@ -217,6 +217,7 @@ Useful commands:
 | `make lint` | Run ruff |
 | `make migrate` | Apply Alembic migrations |
 | `make openapi` | Regenerate `api/openapi.yaml` |
+| `make openapi-check` | Fail if `api/openapi.yaml` is stale; validate it against OpenAPI 3 |
 | `make simulate` | Simulate the wallet integration |
 
 Settings use the `WITHDRAWAL_SOLES_` prefix; see `.env.example` and
@@ -235,10 +236,28 @@ runs without AWS credentials:
 ./scripts/verify-terraform.sh
 ```
 
-A credentialed `terraform plan` is expected before any approved apply. After an
-approved apply, `./scripts/deploy-eks-demo.sh` builds and pushes the image and
-applies the platform module. Tear it down with `./scripts/destroy-eks-demo.sh`.
-This repository does not create AWS resources automatically.
+Both roots keep state in S3 (`scripts/bootstrap-tf-state.sh`,
+`scripts/tf-init.sh`). A credentialed `terraform plan` is expected before any
+approved apply of `infra/terraform`. After that, `./scripts/deploy-eks-demo.sh`
+builds and pushes the image and applies the platform module. Tear it down with
+`./scripts/destroy-eks-demo.sh`.
+
+## CI/CD
+
+[`.github/workflows/verify.yml`](.github/workflows/verify.yml) runs on every
+push and pull request:
+
+1. `make lint`, `make test`, and `make openapi-check`.
+2. `./init.sh` (harness and OpenSpec) and `./scripts/verify-terraform.sh`.
+3. On `main`, when the repository variable `EKS_DEPLOY_ENABLED` is `true`: build
+   the image, push it to ECR as `<commit-sha>` and `latest`, apply
+   `infra/platform` with that tag, and wait for the `withdrawal-soles` rollout
+   and `/health` through the gateway.
+
+In the shared cluster the service calls `billetera-api` at
+`http://billetera-api.billetera.svc.cluster.local:3000` with the shared
+`JWT_SECRET` and issuer `billetera-dev`. CI never creates the cluster or RDS;
+`infra/terraform` stays an operator step.
 
 ## Documentation
 
