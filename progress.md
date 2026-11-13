@@ -751,3 +751,12 @@ chat history is not.
   `eks describe-cluster` (ACTIVE) succeed. Stored `AWS_REGION`, `DB_PASSWORD`
   (from the ignored tfvars), `JWT_SECRET`, and the variable
   `WALLET_MOCK_ENABLED=true`. `EKS_DEPLOY_ENABLED` is intentionally unset.
+- Follow-up (same session): set `EKS_DEPLOY_ENABLED=true` and merged PR #2.
+  Run `43502259584` built and pushed the image but the platform apply failed
+  with "Provider produced inconsistent final plan" (computed annotation); PR #3
+  switched to `var.jwt_secret_version`. Run `43503232677` applied and rolled
+  out `:6f14df1…`; only the image check failed because GitHub drops job outputs
+  containing a secret value (`AWS_REGION` appears in the ECR URL). Manual
+  verification: 2/2 app pods on the new image, `/health` 200, contract check
+  11/11. `fix/ci-image-check` compares against the platform output inside the
+  deploy job.

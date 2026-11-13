@@ -257,7 +257,10 @@
         "2026-11-13 state migrated to s3://app-nube-2-tfstate-205346659030 (infra 45 entries, platform 12 via S3)",
         "2026-11-13 infra apply: 3 added, 1 changed, 0 destroyed; ECR IMMUTABLE_WITH_EXCLUSION (latest); access entry AmazonEKSClusterAdminPolicy for github-actions-withdrawal-soles",
         "GitHub secrets AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, DB_PASSWORD, JWT_SECRET and variables TF_STATE_BUCKET, WALLET_MOCK_ENABLED registered; CI key verified against S3 state, ECR, and EKS",
-        "Live CI deploy not yet run: set EKS_DEPLOY_ENABLED=true and merge PR #2"
+        "Run 43502259584 (merge of PR #2): image 0d96102 pushed; Apply infra/platform failed with 'Provider produced inconsistent final plan' for the computed jwt-secret-version annotation; fixed in PR #3 with var.jwt_secret_version",
+        "Run 43503232677 (merge of PR #3): checks, image, terraform apply, kubeconfig, and rollout passed; Deployment runs :6f14df1aa532db43cd79ee499b3b10c58ec65222; the image check failed only because GitHub dropped the image_uri job output (it contains the AWS_REGION secret value); fixed in fix/ci-image-check",
+        "Manual check after run 43503232677: withdrawal-soles 2/2 Running, mock 1/1, migration Completed; JWT secrets from withdrawal-jwt and issuers billetera-dev; /health 200 through the gateway; wallet_contract_check 11/11 with the balance restored",
+        "Pending: one fully green CI run on main"
       ],
       "notes": "Infra, state, and GitHub configuration are ready; the feature passes after the first CI deploy on main."
     }
