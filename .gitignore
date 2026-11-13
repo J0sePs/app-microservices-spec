@@ -47,3 +47,6 @@ htmlcov/
 
 # Local OpenSpec stores
 .openspec-store/
+
+# Terraform backend config with account-specific bucket names
+infra/backend.hcl

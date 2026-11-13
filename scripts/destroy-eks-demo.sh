@@ -20,9 +20,22 @@ if [[ -z "$DB_PASSWORD" ]]; then
   exit 1
 fi
 
+if [[ -z "${TF_STATE_BUCKET:-}" ]]; then
+  echo "TF_STATE_BUCKET is not set; it must point at the state bucket" >&2
+  exit 1
+fi
+
+export AWS_REGION="$REGION"
+"$ROOT/scripts/tf-init.sh" terraform >/dev/null
+"$ROOT/scripts/tf-init.sh" platform >/dev/null
+
 echo "==> Destroying the platform module"
-terraform -chdir="$PLATFORM_DIR" init -backend=false -input=false >/dev/null
-TF_VAR_db_password="$DB_PASSWORD" terraform -chdir="$PLATFORM_DIR" destroy \
+# jwt_secret has no default; destroy only needs a syntactically valid value.
+TF_VAR_db_password="$DB_PASSWORD" \
+TF_VAR_jwt_secret="${JWT_SECRET:-destroy-only-placeholder}" \
+TF_VAR_state_bucket="$TF_STATE_BUCKET" \
+TF_VAR_aws_region="$REGION" \
+  terraform -chdir="$PLATFORM_DIR" destroy \
   -auto-approve -input=false -no-color
 
 if kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then
@@ -57,3 +70,4 @@ echo "==> Terraform states"
 terraform -chdir="$PLATFORM_DIR" state list
 terraform -chdir="$TF_DIR" state list
 echo "Destroy complete. Verify AWS for any remaining billable resources."
+echo "The state bucket s3://$TF_STATE_BUCKET is kept on purpose."

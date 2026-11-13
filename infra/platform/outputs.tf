@@ -27,3 +27,18 @@ output "traefik_release" {
   description = "Installed Traefik Helm release and chart version."
   value       = "${helm_release.traefik.name} ${helm_release.traefik.version}"
 }
+
+output "deployment_name" {
+  description = "Name of the withdrawal-soles Deployment."
+  value       = kubernetes_deployment_v1.app.metadata[0].name
+}
+
+output "wallet_service_url" {
+  description = "Wallet base URL injected into the application."
+  value       = local.wallet_service_url
+}
+
+output "mock_dependencies_enabled" {
+  description = "Whether the mock-dependencies stub is deployed."
+  value       = var.mock_dependencies_enabled
+}

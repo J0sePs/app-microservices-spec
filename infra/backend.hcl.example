@@ -1,0 +1,12 @@
+# Reference values for the S3 backend shared by infra/terraform and
+# infra/platform. scripts/tf-init.sh passes these automatically from
+# TF_STATE_BUCKET and AWS_REGION; this file documents them for manual init:
+#
+#   terraform -chdir=infra/terraform init -backend-config=../backend.hcl \
+#     -backend-config="key=withdrawal-soles/infra.tfstate"
+#   terraform -chdir=infra/platform init -backend-config=../backend.hcl \
+#     -backend-config="key=withdrawal-soles/platform.tfstate"
+bucket       = "app-nube-2-tfstate-<aws-account-id>"
+region       = "us-east-1"
+encrypt      = true
+use_lockfile = true

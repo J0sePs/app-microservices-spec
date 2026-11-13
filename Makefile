@@ -1,4 +1,4 @@
-.PHONY: install lint test fmt run migrate verify openapi simulate contract-check
+.PHONY: install lint test fmt run migrate verify openapi openapi-check simulate contract-check
 
 PYTHON ?= .venv/bin/python
 PIP ?= .venv/bin/pip
@@ -32,6 +32,14 @@ verify: lint test
 
 openapi:
 	$(PYTHON) scripts/export_openapi.py
+
+# Regenerate the contract, fail if the committed file is stale, then validate it
+# against the OpenAPI 3 schema. CI runs this on every push and pull request.
+openapi-check: openapi
+	@git diff --exit-code -- api/openapi.yaml || { \
+		echo "api/openapi.yaml is out of date: run 'make openapi' and commit the result." >&2; \
+		exit 1; }
+	$(PYTHON) -m openapi_spec_validator api/openapi.yaml
 
 simulate:
 	$(PYTHON) scripts/simulate_wallet_integration.py --mode simulate

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "project": "app-nube-2",
-  "last_updated": "2026-11-10",
+  "last_updated": "2026-11-13",
   "rules": {
     "single_active_feature": true,
     "passing_requires_evidence": true,
@@ -119,9 +119,12 @@
         "2026-11-06 kubectl get nodes: both worker nodes Ready in us-east-1",
         "2026-11-06 teardown: ./scripts/destroy-eks-demo.sh destroyed 41 infra resources; terraform state list is empty and no EKS, RDS, EC2, NAT, ELB, ECR, tagged VPC, EBS, or EKS log group remains",
         "2026-11-10 teardown: ./scripts/destroy-eks-demo.sh destroyed 41 infra resources; terraform -chdir=infra/terraform state list is empty",
-        "2026-11-10 post-destroy AWS checks in us-east-1: no EKS clusters, RDS instances, ECR repositories, tagged VPCs, NAT gateways, ELB/ALB, tagged EBS volumes, tagged security groups, or /aws/eks log groups; the remaining EIP 32.199.142.201 is tagged machupicchu-eip and unrelated"
+        "2026-11-10 post-destroy AWS checks in us-east-1: no EKS clusters, RDS instances, ECR repositories, tagged VPCs, NAT gateways, ELB/ALB, tagged EBS volumes, tagged security groups, or /aws/eks log groups; the remaining EIP 32.199.142.201 is tagged machupicchu-eip and unrelated",
+        "2026-11-13 redeploy: credentialed apply from a saved plan created 41 resources in us-east-1; EKS app-nube-2-dev-eks v1.35.9 with 2 t3.small nodes Ready, private RDS PostgreSQL 15.17, ECR app-nube-2-dev/withdrawal-soles, VPC vpc-0c24dbf2787549f5c",
+        "2026-11-13 outputs: eks_cluster_name app-nube-2-dev-eks, rds_endpoint app-nube-2-dev-postgres.c2fc66is431b.us-east-1.rds.amazonaws.com:5432, rds_database_name withdrawal_soles_db, ecr_repository_url 205346659030.dkr.ecr.us-east-1.amazonaws.com/app-nube-2-dev/withdrawal-soles",
+        "2026-11-13 aws rds describe-db-instances: available, engine 15.17, PubliclyAccessible=false; ECR image 4636058 pushed (71767248 bytes)"
       ],
-      "notes": "Destroyed on 2026-11-10; no billable resources remain. Redeploy with terraform apply and ./scripts/deploy-eks-demo.sh when needed."
+      "notes": "Deployed and live on 2026-11-13 (billing active). Destroy with ./scripts/destroy-eks-demo.sh when the practice run ends."
     },
     {
       "id": "platform-001",
@@ -161,10 +164,16 @@
         "2026-11-06 public smoke test through the gateway: 11/11 passed — /health 200, /docs 200, / 200, list without X-User-Id 401, ownership 200 via mock, POST 201 COMPLETED (operation 77fb4cdd-e0cf-4d7b-ac5a-fbed78f580aa), idempotent replay 200, GET by id 200, amounts 9.99 and 5000.01 422, missing Idempotency-Key 422",
         "2026-11-06 kubectl -n withdrawal-soles get pods,svc,ingress: withdrawal-soles 2/2 Running, mock-dependencies 1/1 Running, withdrawal-migrate Completed",
         "2026-11-06 teardown: platform destroyed before infra; namespace and LoadBalancer removed; both Terraform states empty",
-        "2026-11-10 teardown: platform destroyed first with 9 resources; namespace withdrawal-soles and its LoadBalancer removed; terraform -chdir=infra/platform state list is empty"
+        "2026-11-10 teardown: platform destroyed first with 9 resources; namespace withdrawal-soles and its LoadBalancer removed; terraform -chdir=infra/platform state list is empty",
+        "2026-11-13 deploy: ./scripts/deploy-eks-demo.sh pushed image 4636058 and applied the platform module (10 resources); Traefik 42.2.0 2/2 Running, app 2/2 Running, mock 1/1 Running, migration Job Completed, Ingress created",
+        "2026-11-13 gateway_url = http://abc44d73ea94740738c53880a3469936-1565234038.us-east-1.elb.amazonaws.com",
+        "2026-11-13 gateway checks: /health, /docs, /openapi.json, and / all 200",
+        "2026-11-13 scripts/wallet_contract_check.py against the gateway: 11/11 checks passed; debit 25000 -> 24000 cents and reversal restored 25000",
+        "2026-11-13 domain limits through the gateway: 9.99 and 5000.01 -> 422 INVALID_AMOUNT, 10.00 -> 201 COMPLETED, missing Idempotency-Key -> 422 MISSING_IDEMPOTENCY_KEY; operation b2d17e3f-9569-4330-95f0-3af67444150a reversed with 200 REVERSED",
+        "2026-11-13 wallet target for the practice run is the in-cluster Traefik mock (WALLET_SERVICE_URL=http://traefik.traefik.svc.cluster.local) because the published wallet 52.67.162.209 is unreachable"
       ],
       "status": "passing",
-      "notes": "Second-stage Terraform root module. Verified on 2026-11-06 and destroyed on 2026-11-10; no billable resources remain."
+      "notes": "Deployed and live on 2026-11-13; 10 platform resources. The wallet URL is overridden to the in-cluster mock for this practice run. Destroy with ./scripts/destroy-eks-demo.sh when done."
     },
     {
       "id": "wallet-001",
@@ -220,6 +229,33 @@
         "./init.sh: VERIFICATION PASSED, 5/5 harness subsystems and 16/16 checks"
       ],
       "notes": "Implements PARA-INTEGRAR-RETIROS-3.md for the withdrawal side: JWT-only inbound authentication and the published users contract. Archived as 2026-11-06-secure-api-jwt-users-contract."
+    },
+    {
+      "id": "cicd-001",
+      "priority": 7,
+      "area": "delivery",
+      "title": "Commits on main are verified and deployed to the shared EKS cluster",
+      "user_visible_behavior": "A push to main runs lint, tests, the OpenAPI drift check, the harness, and Terraform checks, then publishes the image to ECR tagged with the commit SHA and latest and rolls it out to the withdrawal-soles namespace of the shared EKS cluster, where the service calls billetera-api through cluster DNS with the shared service JWT.",
+      "change": "cicd-eks-deploy",
+      "verification": [
+        "Run ./scripts/verify-terraform.sh and confirm both roots validate with the S3 backend, ECR lifecycle policy, access entries, mock toggles, and JWT Secret.",
+        "Run make lint, make test, and make openapi-check; confirm openapi-check fails on an injected drift.",
+        "Parse .github/workflows/verify.yml, run actionlint, and run node scripts/validate-harness.mjs.",
+        "Bootstrap the state bucket, apply infra/terraform, register the GitHub secrets and variables, push to main, and confirm the SHA and latest tags in ECR, the rollout of the SHA image in withdrawal-soles, and /health 200 through the gateway.",
+        "Run ./init.sh and record the result."
+      ],
+      "status": "in_progress",
+      "evidence": [
+        "2026-11-13 ./scripts/verify-terraform.sh: fmt, init -backend=false, and validate passed for infra/terraform (S3 backend, IMMUTABLE_WITH_EXCLUSION for latest, ECR lifecycle policy, EKS access entries) and infra/platform (S3 remote state, JWT Secret, mock toggles, dynamic Ingress) with AWS provider 6.71.0",
+        "terraform console renders: default -> no /v1/ route, wallet http://billetera-api.billetera.svc.cluster.local:3000, issuers billetera-dev; wallet_mock_enabled=true -> /v1/ to mock-dependencies and wallet via Traefik; mock_dependencies_enabled=false -> only application routes and the overridden service URLs",
+        "make verify: ruff clean, 106 passed",
+        "make openapi-check: no drift, api/openapi.yaml OK (openapi-spec-validator); an injected summary change in scripts/export_openapi.py made it exit 2 with 'api/openapi.yaml is out of date'",
+        "api/openapi.yaml covers 7 operations incl. /cancel, /reverse, /report, /health; X-User-Id and Idempotency-Key required; BearerAuth; ErrorResponse",
+        ".github/workflows/verify.yml parses (jobs checks, verify, terraform, image, deploy); node scripts/validate-harness.mjs 16/16; actionlint not run (blocked by local permission policy)",
+        "openspec validate --all --strict: 9 passed, 0 failed; ./init.sh VERIFICATION PASSED",
+        "Live CI deploy not yet run: needs the S3 bucket, migration of the live local states, and GitHub secrets/variables"
+      ],
+      "notes": "Code and docs complete; feature stays in_progress until a push to main deploys through CI. The live stack (2026-11-13) still uses local state; migrate it with scripts/tf-init.sh <module> -migrate-state before the next apply."
     }
   ]
 }
