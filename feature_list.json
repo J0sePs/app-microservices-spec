@@ -122,9 +122,11 @@
         "2026-11-10 post-destroy AWS checks in us-east-1: no EKS clusters, RDS instances, ECR repositories, tagged VPCs, NAT gateways, ELB/ALB, tagged EBS volumes, tagged security groups, or /aws/eks log groups; the remaining EIP 32.199.142.201 is tagged machupicchu-eip and unrelated",
         "2026-11-13 redeploy: credentialed apply from a saved plan created 41 resources in us-east-1; EKS app-nube-2-dev-eks v1.35.9 with 2 t3.small nodes Ready, private RDS PostgreSQL 15.17, ECR app-nube-2-dev/withdrawal-soles, VPC vpc-0c24dbf2787549f5c",
         "2026-11-13 outputs: eks_cluster_name app-nube-2-dev-eks, rds_endpoint app-nube-2-dev-postgres.c2fc66is431b.us-east-1.rds.amazonaws.com:5432, rds_database_name withdrawal_soles_db, ecr_repository_url 205346659030.dkr.ecr.us-east-1.amazonaws.com/app-nube-2-dev/withdrawal-soles",
-        "2026-11-13 aws rds describe-db-instances: available, engine 15.17, PubliclyAccessible=false; ECR image 4636058 pushed (71767248 bytes)"
+        "2026-11-13 aws rds describe-db-instances: available, engine 15.17, PubliclyAccessible=false; ECR image 4636058 pushed (71767248 bytes)",
+        "2026-11-13 teardown: ./scripts/destroy-eks-demo.sh (TF_STATE_BUCKET=app-nube-2-tfstate-205346659030) destroyed 44 infra resources after the platform module; state list is empty through S3",
+        "2026-11-13 post-destroy AWS sweep in us-east-1: no EKS clusters, RDS instances, running EC2 instances, available NAT gateways, ELB/ALB, ECR repositories, tagged VPCs, EBS volumes, or /aws/eks/app-nube-2-dev log groups; the only EIP is the unrelated machupicchu-eip"
       ],
-      "notes": "Deployed and live on 2026-11-13 (billing active). Destroy with ./scripts/destroy-eks-demo.sh when the practice run ends."
+      "notes": "Provisioned, verified, and destroyed on 2026-11-13. No billable resources remain; only the S3 state bucket app-nube-2-tfstate-205346659030 is kept on purpose."
     },
     {
       "id": "platform-001",
@@ -170,10 +172,12 @@
         "2026-11-13 gateway checks: /health, /docs, /openapi.json, and / all 200",
         "2026-11-13 scripts/wallet_contract_check.py against the gateway: 11/11 checks passed; debit 25000 -> 24000 cents and reversal restored 25000",
         "2026-11-13 domain limits through the gateway: 9.99 and 5000.01 -> 422 INVALID_AMOUNT, 10.00 -> 201 COMPLETED, missing Idempotency-Key -> 422 MISSING_IDEMPOTENCY_KEY; operation b2d17e3f-9569-4330-95f0-3af67444150a reversed with 200 REVERSED",
-        "2026-11-13 wallet target for the practice run is the in-cluster Traefik mock (WALLET_SERVICE_URL=http://traefik.traefik.svc.cluster.local) because the published wallet 52.67.162.209 is unreachable"
+        "2026-11-13 wallet target for the practice run is the in-cluster Traefik mock (WALLET_SERVICE_URL=http://traefik.traefik.svc.cluster.local) because the published wallet 52.67.162.209 is unreachable",
+        "2026-11-13 final gateway contract check before teardown: 11/11 passed on the CI-rolled image (debit 25000 -> 24000 cents and reversal restored 25000)",
+        "2026-11-13 teardown: platform destroyed first (10 resources) including Traefik, namespace, LoadBalancer, secret, migration job, deployments, services, and ingress; terraform state list is empty through S3"
       ],
       "status": "passing",
-      "notes": "Deployed and live on 2026-11-13; 10 platform resources. The wallet URL is overridden to the in-cluster mock for this practice run. Destroy with ./scripts/destroy-eks-demo.sh when done."
+      "notes": "Deployed and verified on 2026-11-13, then destroyed the same day. No billable platform resources remain."
     },
     {
       "id": "wallet-001",

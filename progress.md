@@ -10,7 +10,7 @@ chat history is not.
 - Standard startup path: `./init.sh`
 - Standard verification path: `./scripts/verify.sh`
 - Current highest-priority unfinished feature: none — all registered features are `passing`; the other five services are follow-ups
-- Current blocker: none; the AWS practice stack is **deployed and live** as of 2026-11-13 (billing active), see `session-handoff.md`
+- Current blocker: none; the AWS practice stack was deployed, verified, and **destroyed** on 2026-11-13 — no billable cloud resources remain (only the S3 state bucket is kept)
 
 ## Session Log
 
@@ -760,3 +760,46 @@ chat history is not.
   verification: 2/2 app pods on the new image, `/health` 200, contract check
   11/11. `fix/ci-image-check` compares against the platform output inside the
   deploy job.
+
+### Session 026
+
+- Date: 2026-11-13
+- Goal: Stop cloud billing after the deployment practice run.
+- Completed:
+  - Confirmed the stack was still live and healthy after the CI/CD work: EKS
+    `app-nube-2-dev-eks`, RDS `withdrawal_soles_db`, pods on the CI-rolled
+    image (2/2 app, 1/1 mock), same Traefik LoadBalancer.
+  - Ran the final gateway contract check: 11/11 passed (health, 401s, list,
+    wallet balance, create 201, replay, debit 25000 → 24000 cents, reverse,
+    second reverse 422, balance restored to 25000).
+  - Ran `TF_STATE_BUCKET=app-nube-2-tfstate-205346659030 AWS_REGION=us-east-1
+    ./scripts/destroy-eks-demo.sh`: destroyed `infra/platform` first
+    (10 resources, including the namespace and its Classic LoadBalancer),
+    deleted the ECR images, then destroyed `infra/terraform`
+    (44 resources), and deleted the EKS CloudWatch log group.
+- Verification run:
+  - `terraform -chdir=infra/terraform state list` and
+    `terraform -chdir=infra/platform state list` through the S3 backend: 0
+    entries each; outputs are empty.
+  - AWS sweep in `us-east-1`: no EKS clusters, RDS instances, running EC2
+    instances, available NAT gateways, ELB/ALB, ECR repositories, tagged VPCs,
+    EBS volumes, or `/aws/eks/app-nube-2-dev` log groups.
+  - `./init.sh`: VERIFICATION PASSED (5/5 subsystems, 16/16 checks).
+- Evidence captured:
+  - `infra/platform`: `Destroy complete! Resources: 10 destroyed`.
+  - `infra/terraform`: `Destroy complete! Resources: 44 destroyed`.
+  - The S3 state bucket `s3://app-nube-2-tfstate-205346659030` is kept on
+    purpose (negligible cost) and is versioned, encrypted, and private.
+  - The only remaining Elastic IP, `32.199.142.201`, is tagged
+    `machupicchu-eip` and unrelated to this stack; it was left untouched.
+- Commits: (this session)
+- Files or artifacts updated: `progress.md`, `session-handoff.md`,
+  `feature_list.json`
+- Known risk or unresolved issue: `cicd-001` stays `in_progress` with the
+  `cicd-eks-deploy` change active; with the cluster destroyed, the CI deploy
+  job will fail until the stack is re-created or `EKS_DEPLOY_ENABLED` is unset.
+- Next best step: re-create the stack only for a new practice run
+  (`./scripts/bootstrap-tf-state.sh` bucket already exists;
+  `TF_STATE_BUCKET=... ./scripts/tf-init.sh terraform` then
+  `terraform -chdir=infra/terraform apply`), and unset `EKS_DEPLOY_ENABLED`
+  while the cluster does not exist.

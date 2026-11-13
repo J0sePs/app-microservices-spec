@@ -3,104 +3,88 @@
 ## Verified Now
 
 - `arch-001`, `withdrawal-001`, `infra-001`, `platform-001`, `wallet-001`, and
-  `security-001` are `passing` with evidence.
+  `security-001` are `passing` with evidence; `cicd-001` is `in_progress` with
+  the active change `openspec/changes/cicd-eks-deploy`.
 - `./init.sh` passes with 5/5 harness subsystems and 16/16 checks (106 tests).
-- **The AWS practice stack is deployed and live** (2026-11-13):
-  - `infra/terraform`: 41 resources in `us-east-1` (VPC, NAT, EKS
-    `app-nube-2-dev-eks` v1.35.9 with 2 `t3.small` nodes Ready, ECR, private RDS
-    PostgreSQL 15.17).
-  - `infra/platform`: 10 resources (Traefik 42.2.0 2/2, app 2/2, mock 1/1,
-    migration Job Completed, Ingress, public Classic LoadBalancer).
-  - Gateway: `http://abc44d73ea94740738c53880a3469936-1565234038.us-east-1.elb.amazonaws.com`
-  - `/health`, `/docs`, `/openapi.json`, `/`: 200.
-  - `scripts/wallet_contract_check.py` against the gateway: 11/11 checks; debit
-    25000 → 24000 cents and reversal restored 25000.
-  - Limits through the gateway: `9.99`/`5000.01` → 422 `INVALID_AMOUNT`,
-    `10.00` → 201, missing `Idempotency-Key` → 422; operation
-    `b2d17e3f-9569-4330-95f0-3af67444150a` reversed (200 `REVERSED`).
-  - The local Docker Compose stack is also running and healthy; `localhost:8080`
-    serves the API through Traefik.
+- **The AWS practice stack was deployed, verified, and destroyed on
+  2026-11-13.** No billable cloud resources remain:
+  - `infra/platform`: `Destroy complete! Resources: 10 destroyed`
+    (Traefik, namespaces, app/mock deployments, services, secret, migration
+    Job, Ingress, Classic LoadBalancer).
+  - `infra/terraform`: `Destroy complete! Resources: 44 destroyed`
+    (EKS, node group, RDS, ECR, VPC, NAT, subnets, IAM, security groups).
+  - Both S3-backed Terraform states are empty; outputs are empty.
+  - AWS sweep in `us-east-1`: no EKS clusters, RDS instances, running EC2
+    instances, available NAT gateways, ELB/ALB, ECR repositories, tagged VPCs,
+    EBS volumes, or `/aws/eks/app-nube-2-dev` log groups.
+  - The S3 state bucket `s3://app-nube-2-tfstate-205346659030` is kept on
+    purpose (versioned, encrypted, private; negligible cost).
+  - The only remaining Elastic IP, `32.199.142.201`, is tagged
+    `machupicchu-eip` and unrelated to this stack.
+- Before teardown, the deployed API passed the full contract check on the
+  CI-rolled image: 11/11 (debit 25000 → 24000 cents, reversal restored 25000).
+- The local Docker Compose stack remains available; `localhost:8080` serves the
+  API through Traefik.
 
 ## Changed This Session
 
 - `scripts/deploy-eks-demo.sh` accepts an optional `WALLET_SERVICE_URL`
-  override; it is passed to the platform module as `wallet_service_url`.
-- `infra/terraform/README.md` and `infra/platform/README.md` document that
-  override.
+  override (already committed earlier in the day).
 - `progress.md`, `feature_list.json`, and `session-handoff.md` record the
-  deployment.
+  deployment and the teardown.
 
 ## Broken Or Unverified
 
-- The stack is **billable** while it runs (~$157/month, ~$0.22/hour).
+- `cicd-001` stays `in_progress`: the GitHub Actions deploy job targets the EKS
+  cluster that no longer exists. Unset the `EKS_DEPLOY_ENABLED` repository
+  variable while the stack is down, or re-create the stack before the next push
+  to `main`.
 - The published wallet `http://52.67.162.209` is unreachable (TCP timeout on
-  port 80). The deployed service therefore points at the in-cluster
-  `mock-dependencies` wallet stub; the repo default still targets the published
-  API.
-- The gateway is public and has no edge authentication; the service trusts
-  `X-User-Id`, so it is practice-only.
-- The development JWT secret (`dev-only-change-me`, 18 bytes) is shared by all
-  services. Production must inject a strong secret in every deployment.
-- The real users-service URL is not published; the deployment uses the
-  in-cluster mock through the gateway.
-- Both states now live in S3 (`s3://app-nube-2-tfstate-205346659030`, keys
-  `withdrawal-soles/infra.tfstate` and `withdrawal-soles/platform.tfstate`,
-  migrated 2026-11-13). Export `TF_STATE_BUCKET` and `AWS_REGION=us-east-1`
-  before any Terraform command; the local `terraform.tfstate` files are empty.
-  The code on `main` before the PR merge still declares the local backend; do
-  not run Terraform from `main` until the PR is merged.
-- `infra/terraform` is applied with the new code (3 added, 1 changed): ECR
-  `IMMUTABLE_WITH_EXCLUSION` for `latest`, lifecycle policy, and a cluster-admin
-  access entry for `github-actions-withdrawal-soles`.
-- GitHub is configured: secrets `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
-  (CI user key), `AWS_REGION`, `DB_PASSWORD`, `JWT_SECRET`
-  (`dev-only-change-me`); variables `TF_STATE_BUCKET`,
-  `WALLET_MOCK_ENABLED=true`. `EKS_DEPLOY_ENABLED` is not set, so merges only
-  verify until it is set to `true`.
-- `cicd-001` is `in_progress`: no CI deploy has run yet; `actionlint` not run.
-- The `billetera` namespace does not exist in the cluster yet; deploys need
-  `WALLET_MOCK_ENABLED=1` (script) or the GitHub variable
-  `WALLET_MOCK_ENABLED=true`.
+  port 80). Deployments should use the in-cluster mock
+  (`WALLET_MOCK_ENABLED=true` or `WALLET_SERVICE_URL`) until it is back.
+- The gateway was public with no edge authentication; the service trusts
+  `X-User-Id`, so it was practice-only.
+- The development JWT secret is shared by all services. Production must inject
+  a strong secret in every deployment.
+- The real users-service and wallet URLs are not published; both used the
+  in-cluster mock.
 
 ## Next Best Step
 
-0. CI/CD (`cicd-001`): merge the `feature/cicd-eks-deploy` PR after
-   registering the GitHub secrets (`AWS_ACCESS_KEY_ID`,
-   `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `DB_PASSWORD`, `JWT_SECRET`) and
-   variables (`TF_STATE_BUCKET`, `EKS_DEPLOY_ENABLED`, `WALLET_MOCK_ENABLED`),
-   then confirm the first deploy and archive `cicd-eks-deploy`.
-
-1. When the practice run ends, stop billing:
+1. Keep billing at zero: nothing else needs destroying. Optionally verify:
 
    ```bash
-   ./scripts/destroy-eks-demo.sh
-   ```
-
-2. Verify the account is clean afterwards:
-
-   ```bash
-   terraform -chdir=infra/terraform state list
-   terraform -chdir=infra/platform state list
+   export TF_STATE_BUCKET=app-nube-2-tfstate-205346659030 AWS_REGION=us-east-1
+   ./scripts/tf-init.sh terraform && terraform -chdir=infra/terraform state list
    aws eks list-clusters --region us-east-1
    aws rds describe-db-instances --region us-east-1 --query 'DBInstances[].DBInstanceIdentifier'
    ```
 
-3. When the published wallet is reachable again, redeploy without the override
-   (or set `WALLET_SERVICE_URL=http://52.67.162.209`) and re-run:
+2. Disable the deploy job while the cluster is down:
 
    ```bash
-   .venv/bin/python scripts/wallet_contract_check.py \
-     --base-url http://<gateway> --wallet-url http://52.67.162.209
+   gh variable delete EKS_DEPLOY_ENABLED --repo J0sePs/app-microservices-spec
    ```
 
-4. Send `api/openapi.yaml` to the wallet team.
+3. Finish `cicd-eks-deploy`: re-create the stack for a practice run, confirm the
+   SHA and `latest` tags and the rollout in `withdrawal-soles`, then archive the
+   change.
+
+4. Redeploy when a practice run is needed:
+
+   ```bash
+   export TF_STATE_BUCKET=app-nube-2-tfstate-205346659030 AWS_REGION=us-east-1
+   ./scripts/tf-init.sh terraform
+   terraform -chdir=infra/terraform apply
+   WALLET_SERVICE_URL=http://traefik.traefik.svc.cluster.local ./scripts/deploy-eks-demo.sh
+   ```
 
 ## Commands
 
 ```bash
 ./init.sh
 make verify
-make openapi
+make openapi-check
 openspec validate --all --strict
 
 # Wallet and auth simulation
@@ -116,12 +100,12 @@ docker compose up -d --build
 curl http://localhost:8080/health
 curl http://localhost:8080/docs
 
-# AWS deployment
+# AWS deployment (S3 state backend)
+export TF_STATE_BUCKET=app-nube-2-tfstate-205346659030 AWS_REGION=us-east-1
+./scripts/tf-init.sh terraform
 terraform -chdir=infra/terraform apply
-export TF_STATE_BUCKET=<bucket> AWS_REGION=us-east-1
-JWT_SECRET='<shared-with-billetera-api>' WALLET_MOCK_ENABLED=1 ./scripts/deploy-eks-demo.sh
+WALLET_SERVICE_URL=http://traefik.traefik.svc.cluster.local ./scripts/deploy-eks-demo.sh
 terraform -chdir=infra/platform output -raw gateway_url
-kubectl -n withdrawal-soles get pods,svc,ingress
 
 # AWS teardown
 ./scripts/destroy-eks-demo.sh
