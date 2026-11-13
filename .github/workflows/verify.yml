@@ -96,9 +96,10 @@ jobs:
       && github.ref == 'refs/heads/main'
       && vars.EKS_DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
+    # GitHub drops job outputs that contain a secret value. AWS_REGION is a
+    # secret, so values with the region (ECR URL, gateway URL) never cross jobs.
     outputs:
       image_tag: ${{ steps.meta.outputs.image_tag }}
-      image_uri: ${{ steps.meta.outputs.image_uri }}
       cluster_name: ${{ steps.infra.outputs.cluster_name }}
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -148,12 +149,10 @@ jobs:
       - name: Image metadata
         id: meta
         env:
-          ECR_URL: ${{ steps.infra.outputs.ecr_url }}
           ECR_NAME: ${{ steps.infra.outputs.ecr_name }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
           echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
-          echo "image_uri=$ECR_URL:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
           # Commit SHA tags are immutable in ECR; a re-run must not rebuild.
           if aws ecr describe-images --repository-name "$ECR_NAME" \
               --image-ids "imageTag=$IMAGE_TAG" >/dev/null 2>&1; then
@@ -209,7 +208,6 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: eks-dev
-      url: ${{ steps.smoke.outputs.gateway_url }}
     # Never cancel a running apply; later deploys wait their turn.
     concurrency:
       group: eks-deploy
@@ -218,7 +216,6 @@ jobs:
       AWS_REGION: ${{ secrets.AWS_REGION }}
       TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
       IMAGE_TAG: ${{ needs.image.outputs.image_tag }}
-      IMAGE_URI: ${{ needs.image.outputs.image_uri }}
       CLUSTER_NAME: ${{ needs.image.outputs.cluster_name }}
       NAMESPACE: withdrawal-soles
       DEPLOYMENT: withdrawal-soles
@@ -280,25 +277,24 @@ jobs:
         run: |
           running="$(kubectl -n "$NAMESPACE" get deployment "$DEPLOYMENT" \
             -o jsonpath='{.spec.template.spec.containers[0].image}')"
+          expected="$(terraform -chdir=infra/platform output -raw image_uri)"
           echo "Running image: $running"
-          if [[ "$running" != "$IMAGE_URI" ]]; then
-            echo "::error::Expected $IMAGE_URI but the Deployment runs $running"
+          if [[ "$running" != "$expected" || "${running##*:}" != "$IMAGE_TAG" ]]; then
+            echo "::error::Expected tag $IMAGE_TAG ($expected) but the Deployment runs $running"
             exit 1
           fi
           kubectl -n "$NAMESPACE" get pods -l "app.kubernetes.io/name=$DEPLOYMENT" -o wide
 
       - name: Smoke test through the gateway
-        id: smoke
         run: |
           gateway="$(terraform -chdir=infra/platform output -raw gateway_url)"
-          echo "gateway_url=$gateway" >> "$GITHUB_OUTPUT"
           curl --fail --silent --show-error --retry 10 --retry-delay 6 --retry-all-errors \
             "$gateway/health"
           echo
           {
             echo "### Deployed \`$IMAGE_TAG\`"
             echo
-            echo "- Image: \`$IMAGE_URI\`"
+            echo "- Image: \`$(terraform -chdir=infra/platform output -raw image_uri)\`"
             echo "- Gateway: $gateway"
             echo "- Wallet URL: \`$(terraform -chdir=infra/platform output -raw wallet_service_url)\`"
           } >> "$GITHUB_STEP_SUMMARY"
