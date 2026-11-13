@@ -61,6 +61,7 @@ outputs them.
 | `mock_dependencies_enabled` | `true` | Deploys the stub for `/usuarios`, `/api/v1/accounts`, and `/api/v1/transactions`. `billetera-api` does not serve these routes. |
 | `user_service_url`, `users_service_url`, `transaction_service_url` | `""` | Overrides; empty uses the in-cluster Traefik gateway. Required when the stub is disabled. |
 | `jwt_secret` | none | Stored in Secret `withdrawal-jwt`; injected into the auth, wallet, and users JWT settings. Must equal `JWT_SECRET` in `billetera-api`. |
+| `jwt_secret_version` | `1` | Pod annotation; change it with `jwt_secret` to restart the pods on rotation. |
 | `jwt_issuer` | `billetera-dev` | Issuer for the three JWT settings. Must equal `JWT_ISSUER` in `billetera-api`. |
 
 While `billetera-api` is not deployed in the cluster, use the wallet stub:
