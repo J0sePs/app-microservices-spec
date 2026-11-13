@@ -23,8 +23,8 @@
     `machupicchu-eip` and unrelated to this stack.
 - Before teardown, the deployed API passed the full contract check on the
   CI-rolled image: 11/11 (debit 25000 → 24000 cents, reversal restored 25000).
-- The local Docker Compose stack remains available; `localhost:8080` serves the
-  API through Traefik.
+- The local Docker Compose stack is **not running** (`docker compose ps` is
+  empty); start it with `docker compose up -d --build` if needed.
 
 ## Changed This Session
 
